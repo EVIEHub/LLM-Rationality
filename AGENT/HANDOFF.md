@@ -49,6 +49,8 @@ The whole reading set is ≈ 30 minutes. Do not skip it: there are decisions in 
 
 ## 2 — Environment setup on the GPU box
 
+> **Shortcut:** the repo ships [`setup.sh`](../setup.sh) at the root which automates steps 1–6 below (system packages, Python 3.11 venv, PyTorch, vLLM, project deps, HF login, vLLM end-to-end smoke test). Use it on a fresh cloud image, then continue with the post-clone steps it prints. The manual steps below are kept as a reference and a fallback.
+
 ```bash
 # 1. Clone
 git clone <repo-url> rational-gap-of-LLM-reasoning
