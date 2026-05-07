@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any, Iterable, Iterator
 
 
-CACHE_FORMAT_VERSION: int = 1
+CACHE_FORMAT_VERSION: int = 2
 
 
 @dataclass(frozen=True)
@@ -48,6 +48,14 @@ class CacheKey:
     Numeric fields are coerced to canonical types in ``__post_init__``,
     so ``CacheKey(K=4, temperature=1)`` and
     ``CacheKey(K=4, temperature=1.0)`` produce identical fingerprints.
+
+    History:
+        v2 (2026-05-08): added ``num_prompts`` because subsampling
+            (e.g. MATH 5000 -> 1000 for compute budget) means two runs
+            with different prompt counts must NOT collide on a single
+            cache file. ``CACHE_FORMAT_VERSION`` bumped 1->2 so old
+            v1 files (without num_prompts in their header) are not
+            silently consumed by the new key shape.
     """
 
     model: str
@@ -59,6 +67,7 @@ class CacheKey:
     max_tokens: int
     seed: int
     prompt_template_version: str
+    num_prompts: int
 
     def __post_init__(self) -> None:
         # Frozen-dataclass-safe canonicalisation of numeric types.
@@ -68,6 +77,7 @@ class CacheKey:
         object.__setattr__(self, "top_k", int(self.top_k))
         object.__setattr__(self, "max_tokens", int(self.max_tokens))
         object.__setattr__(self, "seed", int(self.seed))
+        object.__setattr__(self, "num_prompts", int(self.num_prompts))
 
     def fingerprint(self) -> str:
         """Stable 16-hex-char SHA-256 digest of the canonical key."""

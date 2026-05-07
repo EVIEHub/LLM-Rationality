@@ -46,6 +46,7 @@ def test_fingerprint_differs_for_each_field(cache_key_factory) -> None:
         cache_key_factory(max_tokens=2048),
         cache_key_factory(seed=43),
         cache_key_factory(prompt_template_version="v2"),
+        cache_key_factory(num_prompts=500),
     ]
     fps = {p.fingerprint() for p in perturbations}
     assert base.fingerprint() not in fps
@@ -62,6 +63,14 @@ def test_int_and_float_canonicalised_for_temperature(cache_key_factory) -> None:
 
 def test_int_and_float_canonicalised_for_K(cache_key_factory) -> None:
     assert cache_key_factory(K=4).fingerprint() == cache_key_factory(K=4.0).fingerprint()
+
+
+def test_int_and_float_canonicalised_for_num_prompts(cache_key_factory) -> None:
+    """v2: num_prompts is in the key; canonical type is int."""
+    assert (
+        cache_key_factory(num_prompts=200).fingerprint()
+        == cache_key_factory(num_prompts=200.0).fingerprint()  # type: ignore[arg-type]
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -194,6 +203,7 @@ def test_read_detects_format_version_mismatch(tmp_path: Path, cache_key_factory)
                         max_tokens=key.max_tokens,
                         seed=key.seed,
                         prompt_template_version=key.prompt_template_version,
+                        num_prompts=key.num_prompts,
                     ),
                     "_format_version": CACHE_FORMAT_VERSION - 1,
                 }

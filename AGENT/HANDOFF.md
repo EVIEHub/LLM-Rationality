@@ -76,7 +76,16 @@ python -c "import torch; print('cuda?', torch.cuda.is_available(), 'count:', tor
 # 5. Configure local paths
 cp configs/paths.template.yaml configs/paths.yaml
 # Edit configs/paths.yaml — set outputs_root to a writable dir OUTSIDE
-# the repo with ≥ 20 GB free (e.g. /workspace/rg_outputs on RunPod).
+# the repo with ≥ 20 GB free (e.g. /workspace/rg_outputs on RunPod, or
+# /root/autodl-tmp/rg_outputs on AutoDL).
+
+# 5b. If huggingface.co is unreachable from the box (common on Chinese
+#     GPU clouds — the prior session hit "Network is unreachable" on
+#     AutoDL), use the hf-mirror.com community mirror:
+#         export HF_ENDPOINT=https://hf-mirror.com
+#     Add the same line to ~/.bashrc so vLLM and HF datasets find it.
+#     huggingface_hub, transformers, datasets, and vllm all respect the
+#     env var transparently.
 
 # 6. Pre-download model weights (NOT inside the measurement loop, per
 #    AGENT.md §5 "no network reads during sampling").

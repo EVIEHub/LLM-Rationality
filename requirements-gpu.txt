@@ -1,0 +1,12 @@
+# GPU-only deps. Installed AFTER PyTorch (which setup.sh installs from
+# the cu124 index, since the default PyPI wheel is CPU-only).
+#
+# Version pins follow setup.sh — tested vLLM 0.6.3 / torch 2.5.1 / CUDA
+# 12.4 wheel. If a future session changes the vLLM version, update the
+# pin here and in setup.sh in the same commit.
+
+vllm==0.6.3
+transformers==4.45.2
+accelerate
+huggingface_hub
+tqdm

@@ -23,7 +23,7 @@ cd "$WORKSPACE"
 echo "=== Step 1/11: system packages ==="
 apt-get update
 apt-get install -y --no-install-recommends \
-    git tmux htop vim curl wget unzip ca-certificates \
+    git tmux htop vim curl wget unzip ca-certificasstes \
     software-properties-common \
     build-essential
 

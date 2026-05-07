@@ -32,7 +32,7 @@ All operations are deterministic given a fixed seed.
 - **vLLM's `n=K` parameter** is the correct way to sample $K$ trajectories per prompt. Never call `generate()` in a loop $K$ times — it is 5–10× slower and breaks reproducibility.
 
 ### 3.2 Caching
-- **Cache key must include all parameters that affect output**: `(model, dataset, K, temperature, top_p, top_k, max_tokens, seed, prompt_template_version)`. Missing any of these creates silent bugs.
+- **Cache key must include all parameters that affect output**: `(model, dataset, K, temperature, top_p, top_k, max_tokens, seed, prompt_template_version, num_prompts)`. Missing any of these creates silent bugs. (`num_prompts` was added in `CACHE_FORMAT_VERSION=2` once subsampling — e.g. MATH 5000 → 1000 — became part of H1's design; before that it was always implicitly the full test split.)
 - **Never modify a cached file in place.** Treat `data/samples/*.jsonl.gz` as immutable. Recompute metrics; do not patch samples.
 - **Cache hit must be byte-deterministic.** If you change cache key format, bump a version field, do not silently invalidate old caches.
 

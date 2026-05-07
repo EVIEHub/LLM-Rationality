@@ -2,7 +2,12 @@
   "permissions": {
     "allow": [
       "Bash(python -m pytest tests/test_logging_utils.py -v)",
-      "Bash(python -m pytest --tb=no -q)"
+      "Bash(ssh -p 34240 root@connect.nma1.seetacloud.com 'set -e *)",
+      "Bash(ssh -p 34240 root@connect.nma1.seetacloud.com ' *)",
+      "Bash(scp -P 34240 /home/brian/Documents/research/rational-gap-of-LLM-reasoning/src/sampling/__init__.py /home/brian/Documents/research/rational-gap-of-LLM-reasoning/src/sampling/vllm_runner.py root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/src/sampling/)",
+      "Bash(ssh -p 34240 root@connect.nma1.seetacloud.com 'mkdir -p ~/rational-gap-of-LLM-reasoning/src/sampling')",
+      "Bash(scp -P 34240 /home/brian/Documents/research/rational-gap-of-LLM-reasoning/tests/test_vllm_runner.py root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/tests/)",
+      "Bash(scp -P 34240 /home/brian/Documents/research/rational-gap-of-LLM-reasoning/scripts/__init__.py /home/brian/Documents/research/rational-gap-of-LLM-reasoning/scripts/smoke_test.py root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/scripts/)"
     ]
   }
 }

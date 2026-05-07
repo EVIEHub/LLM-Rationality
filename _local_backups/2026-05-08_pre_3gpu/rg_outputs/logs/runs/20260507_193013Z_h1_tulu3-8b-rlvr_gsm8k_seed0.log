@@ -1,0 +1,30 @@
+2026-05-08 03:30:13,109 INFO     __main__: Starting h1_tulu3-8b-rlvr_gsm8k_seed0 | K=64, num_prompts=1319, seed=0, max_tokens=1024
+2026-05-08 03:30:13,120 INFO     __main__: Loading dataset: {'path': 'openai/gsm8k', 'split': 'test', 'name': 'main'}
+2026-05-08 03:30:13,121 DEBUG    urllib3.connectionpool: Starting new HTTPS connection (1): hf-mirror.com:443
+2026-05-08 03:30:15,451 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /datasets/openai/gsm8k/resolve/main/README.md HTTP/1.1" 307 0
+2026-05-08 03:30:15,554 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /api/resolve-cache/datasets/openai/gsm8k/740312add88f781978c0658806c59bc2815b9866/README.md HTTP/1.1" 200 0
+2026-05-08 03:30:17,087 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /datasets/openai/gsm8k/resolve/740312add88f781978c0658806c59bc2815b9866/gsm8k.py HTTP/1.1" 404 0
+2026-05-08 03:30:17,088 DEBUG    urllib3.connectionpool: Starting new HTTPS connection (1): s3.amazonaws.com:443
+2026-05-08 03:30:17,947 DEBUG    urllib3.connectionpool: https://s3.amazonaws.com:443 "HEAD /datasets.huggingface.co/datasets/datasets/openai/gsm8k/openai/gsm8k.py HTTP/1.1" 404 0
+2026-05-08 03:30:18,159 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "GET /api/datasets/openai/gsm8k/revision/740312add88f781978c0658806c59bc2815b9866 HTTP/1.1" 200 None
+2026-05-08 03:30:19,712 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /datasets/openai/gsm8k/resolve/740312add88f781978c0658806c59bc2815b9866/.huggingface.yaml HTTP/1.1" 404 0
+2026-05-08 03:30:19,714 DEBUG    urllib3.connectionpool: Starting new HTTPS connection (1): datasets-server.hf-mirror.com:443
+2026-05-08 03:30:20,160 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "GET /api/datasets/openai/gsm8k/tree/740312add88f781978c0658806c59bc2815b9866/main?recursive=True&expand=False HTTP/1.1" 200 None
+2026-05-08 03:30:20,259 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "GET /api/datasets/openai/gsm8k/tree/740312add88f781978c0658806c59bc2815b9866?recursive=False&expand=False HTTP/1.1" 200 None
+2026-05-08 03:30:20,570 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /datasets/openai/gsm8k/resolve/740312add88f781978c0658806c59bc2815b9866/dataset_infos.json HTTP/1.1" 404 0
+2026-05-08 03:30:20,571 DEBUG    filelock: Attempting to acquire lock 140496406549520 on /root/autodl-tmp/hf_cache/datasets/_root_autodl-tmp_hf_cache_datasets_openai___gsm8k_main_0.0.0_740312add88f781978c0658806c59bc2815b9866.lock
+2026-05-08 03:30:20,571 DEBUG    filelock: Lock 140496406549520 acquired on /root/autodl-tmp/hf_cache/datasets/_root_autodl-tmp_hf_cache_datasets_openai___gsm8k_main_0.0.0_740312add88f781978c0658806c59bc2815b9866.lock
+2026-05-08 03:30:20,572 DEBUG    fsspec.local: open file: /root/autodl-tmp/hf_cache/datasets/openai___gsm8k/main/0.0.0/740312add88f781978c0658806c59bc2815b9866/dataset_info.json
+2026-05-08 03:30:20,572 DEBUG    filelock: Attempting to release lock 140496406549520 on /root/autodl-tmp/hf_cache/datasets/_root_autodl-tmp_hf_cache_datasets_openai___gsm8k_main_0.0.0_740312add88f781978c0658806c59bc2815b9866.lock
+2026-05-08 03:30:20,572 DEBUG    filelock: Lock 140496406549520 released on /root/autodl-tmp/hf_cache/datasets/_root_autodl-tmp_hf_cache_datasets_openai___gsm8k_main_0.0.0_740312add88f781978c0658806c59bc2815b9866.lock
+2026-05-08 03:30:20,573 DEBUG    filelock: Attempting to acquire lock 140496403959824 on /root/autodl-tmp/hf_cache/datasets/openai___gsm8k/main/0.0.0/740312add88f781978c0658806c59bc2815b9866_builder.lock
+2026-05-08 03:30:20,574 DEBUG    filelock: Lock 140496403959824 acquired on /root/autodl-tmp/hf_cache/datasets/openai___gsm8k/main/0.0.0/740312add88f781978c0658806c59bc2815b9866_builder.lock
+2026-05-08 03:30:20,574 DEBUG    fsspec.local: open file: /root/autodl-tmp/hf_cache/datasets/openai___gsm8k/main/0.0.0/740312add88f781978c0658806c59bc2815b9866/dataset_info.json
+2026-05-08 03:30:20,574 DEBUG    filelock: Attempting to release lock 140496403959824 on /root/autodl-tmp/hf_cache/datasets/openai___gsm8k/main/0.0.0/740312add88f781978c0658806c59bc2815b9866_builder.lock
+2026-05-08 03:30:20,574 DEBUG    filelock: Lock 140496403959824 released on /root/autodl-tmp/hf_cache/datasets/openai___gsm8k/main/0.0.0/740312add88f781978c0658806c59bc2815b9866_builder.lock
+2026-05-08 03:30:20,597 INFO     __main__: Using 1319 prompts
+2026-05-08 03:30:20,597 INFO     __main__: Cache key fingerprint: ce8ab57280fdb46c
+2026-05-08 03:30:20,597 INFO     __main__: Loading tokenizer for allenai/Llama-3.1-Tulu-3-8B
+2026-05-08 03:30:20,862 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /allenai/Llama-3.1-Tulu-3-8B/resolve/main/tokenizer_config.json HTTP/1.1" 307 0
+2026-05-08 03:30:20,955 DEBUG    urllib3.connectionpool: https://hf-mirror.com:443 "HEAD /api/resolve-cache/models/allenai/Llama-3.1-Tulu-3-8B/666943798adbde0b1aff34626007e26986a3c107/tokenizer_config.json HTTP/1.1" 200 0
+2026-05-08 03:30:21,340 INFO     __main__: Cache miss — sampling K=64 completions per prompt
