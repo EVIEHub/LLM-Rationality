@@ -1,0 +1,87 @@
+# Dataset registry for the rational-gap pipeline.
+#
+# Each entry is a short alias mapping to:
+#
+#   hf_id:                    HuggingFace dataset id.
+#   hf_config:                Optional dataset config name (e.g. "main"
+#                             for GSM8K). null if not applicable.
+#   split:                    Split name; "test" by default.
+#   verifier:                 Key in src/verification/interface.py
+#                             registry. Must match exactly.
+#   prompt_field:             Field name with the question / prompt.
+#   ground_truth_field:       Field name with the answer / test code.
+#   entry_point_field:        Optional. For code-execution datasets
+#                             (HumanEval) — field with the function
+#                             name to call from the check program.
+#   templates:
+#     chat:
+#       system:               System prompt for instruct/SFT/DPO/RLVR
+#                             models. Encodes the answer-format hint
+#                             (#### for GSM8K, \boxed{} for MATH).
+#       user_template:        Python format string with prompt-field
+#                             interpolation.
+#     few_shot:
+#       examples_path:        Path (relative to repo root) to a
+#                             few-shot examples file. NOTE: these
+#                             files do not yet exist; they will be
+#                             added when H2 (which requires few-shot
+#                             prompting on the base model) lands.
+#       user_template:        Format string for the final question.
+#   prompt_template_version:  String. Bumped when any template above
+#                             changes. Must match the value passed to
+#                             CacheKey.prompt_template_version so the
+#                             cache invalidates correctly.
+#   test_size:                Approximate test-split size. Used for
+#                             compute-budget estimation; not enforced.
+
+gsm8k:
+  hf_id: "openai/gsm8k"
+  hf_config: "main"
+  split: "test"
+  verifier: "gsm8k"
+  prompt_field: "question"
+  ground_truth_field: "answer"
+  test_size: 1319
+  templates:
+    chat:
+      system: "Solve the following math problem step by step. After your reasoning, write the final numeric answer on its own line in the format: #### <answer>"
+      user_template: "{question}"
+    few_shot:
+      examples_path: "configs/few_shot/gsm8k_8shot.txt"  # TODO: create when H2 lands
+      user_template: "Question: {question}\nAnswer:"
+  prompt_template_version: "v1"
+
+math:
+  hf_id: "EleutherAI/hendrycks_math"
+  hf_config: null
+  split: "test"
+  verifier: "math"
+  prompt_field: "problem"
+  ground_truth_field: "solution"
+  test_size: 5000
+  templates:
+    chat:
+      system: "Solve the following math problem. Show your reasoning, then put your final answer in \\boxed{}."
+      user_template: "{problem}"
+    few_shot:
+      examples_path: "configs/few_shot/math_4shot.txt"  # TODO: create when H2 lands
+      user_template: "Problem: {problem}\nSolution:"
+  prompt_template_version: "v1"
+
+humaneval:
+  hf_id: "openai/openai_humaneval"
+  hf_config: null
+  split: "test"
+  verifier: "humaneval"
+  prompt_field: "prompt"
+  ground_truth_field: "test"
+  entry_point_field: "entry_point"
+  test_size: 164
+  templates:
+    chat:
+      system: "Complete the following Python function. Return ONLY the function definition (signature + body); do not include explanation or examples."
+      user_template: "{prompt}"
+    few_shot:
+      examples_path: "configs/few_shot/humaneval_3shot.txt"  # TODO: create when H2 lands
+      user_template: "{prompt}"
+  prompt_template_version: "v1"

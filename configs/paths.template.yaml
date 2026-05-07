@@ -1,0 +1,16 @@
+# Local path configuration for the rational-gap pipeline.
+#
+# Copy this file to `configs/paths.yaml` (gitignored) and edit
+# `outputs_root` to point at a writable directory OUTSIDE the
+# repository, with at least 20 GB free.
+#
+# All other keys are interpolated from `outputs_root` and rarely need
+# to be overridden. Variables are expanded with ${name} substitution
+# and `~` is expanded to the user's home directory.
+
+outputs_root: "~/rational_gap_outputs"
+
+samples_dir: "${outputs_root}/data/samples"
+results_dir: "${outputs_root}/results"
+raw_data_dir: "${outputs_root}/data/raw"
+logs_dir: "${outputs_root}/logs"

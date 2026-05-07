@@ -1,0 +1,100 @@
+# Model registry for the rational-gap pipeline.
+#
+# Each entry is a short alias mapping to:
+#
+#   hf_id:                  HuggingFace model id (full org/name path).
+#   family:                 "llama" | "qwen" | "tulu". Drives any
+#                           family-specific sampling defaults.
+#   size_b:                 Parameter count in billions. Used for
+#                           compute-budget estimation, not sampling.
+#   prompt_mode:            "chat" — apply tokenizer.apply_chat_template;
+#                           "few_shot" — prepend in-context examples,
+#                           used for base models with no chat template.
+#   trajectory_stage:       Optional. One of "base" | "sft" | "dpo" |
+#                           "rlvr". Set for Tülu-3-trajectory models;
+#                           omitted for one-off instruct models. Used
+#                           by H2.
+#   supports_system_prompt: Whether the chat template accepts a system
+#                           role. False for base / few-shot models.
+#   notes:                  Optional free-text annotation.
+#
+# Aliases use lowercase-hyphen-with-dots convention so they appear cleanly
+# in cache filenames and figures.
+
+# === Tülu-3 trajectory (H2: independence from value alignment) ===
+
+tulu3-8b-base:
+  hf_id: "meta-llama/Llama-3.1-8B"
+  family: "llama"
+  size_b: 8.0
+  prompt_mode: "few_shot"
+  trajectory_stage: "base"
+  supports_system_prompt: false
+  notes: "Llama-3.1-8B is the pretrained base on which Tülu-3 is built. No chat template; H2 must use few-shot prompting to elicit responses comparable to the SFT/DPO/RLVR stages."
+
+tulu3-8b-sft:
+  hf_id: "allenai/Llama-3.1-Tulu-3-8B-SFT"
+  family: "tulu"
+  size_b: 8.0
+  prompt_mode: "chat"
+  trajectory_stage: "sft"
+  supports_system_prompt: true
+
+tulu3-8b-dpo:
+  hf_id: "allenai/Llama-3.1-Tulu-3-8B-DPO"
+  family: "tulu"
+  size_b: 8.0
+  prompt_mode: "chat"
+  trajectory_stage: "dpo"
+  supports_system_prompt: true
+
+tulu3-8b-rlvr:
+  hf_id: "allenai/Llama-3.1-Tulu-3-8B"
+  family: "tulu"
+  size_b: 8.0
+  prompt_mode: "chat"
+  trajectory_stage: "rlvr"
+  supports_system_prompt: true
+  notes: "Tülu-3-8B final = RLVR stage. Headline H1 model from the Tülu trajectory."
+
+# === H1 cross-model panel ===
+
+qwen2.5-7b-instruct:
+  hf_id: "Qwen/Qwen2.5-7B-Instruct"
+  family: "qwen"
+  size_b: 7.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+
+llama3.1-8b-instruct:
+  hf_id: "meta-llama/Llama-3.1-8B-Instruct"
+  family: "llama"
+  size_b: 8.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+
+# === Smoke-test / fast-iteration models ===
+
+qwen2.5-1.5b-instruct:
+  hf_id: "Qwen/Qwen2.5-1.5B-Instruct"
+  family: "qwen"
+  size_b: 1.5
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  notes: "Default smoke-test model. Small enough for a single small GPU; fast enough to iterate on the pipeline in seconds."
+
+qwen2.5-0.5b-instruct:
+  hf_id: "Qwen/Qwen2.5-0.5B-Instruct"
+  family: "qwen"
+  size_b: 0.5
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  notes: "Smallest variant; useful for very fast pipeline plumbing checks where model quality is irrelevant."
+
+qwen2.5-3b-instruct:
+  hf_id: "Qwen/Qwen2.5-3B-Instruct"
+  family: "qwen"
+  size_b: 3.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  notes: "Mid-size Qwen for sanity-checking H1/H3 plots before scaling to 7B/8B."

@@ -1,0 +1,70 @@
+# H1: Existence of the rational gap.
+#
+# Hypothesis (per project_hypotheses memory note): R_hat_K grows
+# substantially with K before saturating, indicating that the reachable
+# region of pi_theta contains high-utility outputs that sampling does
+# not concentrate on.
+#
+# The headline figure is the saturation curve R_hat_K vs K, across
+# (model, dataset) cells. K is a first-class axis. K=64 is the
+# reference scalar reported in the abstract / tables.
+#
+# Sampling is done **once per (model, dataset, seed) at K=K_max**;
+# the saturation curve at K' <= K_max is computed by direct truncation
+# to the first K' columns of the (M, K_max) utility matrix, applying
+# the paper formulas verbatim:
+#     U_circ_at_K(utilities, K) = utilities[:, :K].max(axis=1).mean()
+#     U_bar_at_K(utilities, K)  = utilities[:, :K].mean()
+#     R_hat_at_K(utilities, K)  = U_circ_at_K - U_bar_at_K
+# These three helpers in src/metrics/rational_gap.py are one-line
+# transcriptions of the paper definitions — no binomial closed forms,
+# no "expectation" framing.
+#
+# Cross-seed aggregation: each (model, dataset) cell is run with 3
+# seeds (AGENT.md §3.5). Per the methodology memo, the per-seed
+# uncertainty is a 95% bootstrap CI over prompts (B = 1000); the
+# cross-seed report is mean ± std of the per-seed bootstrap means.
+
+hypothesis: h1
+description: "Existence of the rational gap across models x datasets at varying K. Saturation curve R_hat_K vs K is the headline figure; K=64 is the reference."
+
+# All H1 models are instruct → chat-mode prompting. (Base models are
+# H2 territory; including a base model in H1 would conflate "no
+# alignment" with "rational gap exists".)
+models:
+  - tulu3-8b-rlvr
+  - qwen2.5-7b-instruct
+  - llama3.1-8b-instruct
+
+datasets:
+  - gsm8k
+  - math
+  - humaneval
+
+# Sample once at K_max; subsample for the curve.
+K_max: 64
+K_grid_for_curve: [1, 2, 4, 8, 16, 32, 64]
+K_reference: 64
+
+seeds: [0, 1, 2]
+
+# AGENT.md §3.1 defaults. H1 must NOT vary these — H3 is the
+# experiment that varies sampling parameters.
+sampling:
+  temperature: 1.0
+  top_p: 1.0
+  top_k: -1
+  # max_tokens is dataset-dependent; left to the runner to read from
+  # the dataset config (with a fallback default of 2048).
+
+# Use the full test split unless overridden at the command line.
+num_prompts: null
+
+# Per the methodology memo: bootstrap over prompts at the per-seed
+# level, then aggregate across seeds.
+bootstrap:
+  n_resamples: 1000
+  confidence: 0.95
+
+# Outputs land in ${results_dir}/h1.
+output_subdir: "h1"
