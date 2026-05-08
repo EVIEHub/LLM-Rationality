@@ -18,7 +18,11 @@
       "Bash(ssh -p 34240 -o StrictHostKeyChecking=no root@connect.nma1.seetacloud.com 'ls ~/rational-gap-of-LLM-reasoning/scripts/ 2>/dev/null')",
       "Bash(rm -v /home/brian/Documents/research/rational-gap-of-LLM-reasoning/setup.sh /tmp/show_all.py /tmp/show_h1.py /tmp/show_slice.py 2>&1; echo \"---\"; echo \"=== local scripts/ ===\"; ls scripts/; echo \"=== local repo root ===\"; ls /home/brian/Documents/research/rational-gap-of-LLM-reasoning/ | grep -v '^\\\\.')",
       "Bash(git -C /home/brian/Documents/research/rational-gap-of-LLM-reasoning/ ls-files)",
-      "Bash(git -C /home/brian/Documents/research/rational-gap-of-LLM-reasoning/ status --short _local_backups/)"
+      "Bash(git -C /home/brian/Documents/research/rational-gap-of-LLM-reasoning/ status --short _local_backups/)",
+      "Bash(ssh -p 34240 -o StrictHostKeyChecking=no root@connect.nma1.seetacloud.com 'extract_progress\\(\\) { *)",
+      "Bash(ssh -p *)",
+      "Bash(bash -n /tmp/h2_humaneval_addendum.sh)",
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/h2_humaneval_addendum.sh root@connect.nma1.seetacloud.com:/root/h2_humaneval_addendum.sh)"
     ],
     "additionalDirectories": [
       "/tmp"

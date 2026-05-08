@@ -52,13 +52,18 @@ mkdir -p "$LOG_DIR" "$OUTPUTS_ROOT/results/h2"
 declare -A NUM_PROMPTS=(
     [gsm8k]=1319
     [math]=1000
+    [humaneval]=164
 )
 SEED="${SEED:-0}"
 K="${K:-64}"
 MAX_TOKENS="${MAX_TOKENS:-1024}"
 GPU_MEM="${GPU_MEM:-0.85}"
 
-DATASETS=(gsm8k math)
+# H2 covers the same dataset suite as H1, so the trajectory comparison
+# (alignment vs reachability) is anchored in identical evaluation surface.
+# RLVR cells are typically cache hits from H1 if H1 was run first with
+# the same K, num_prompts, max_tokens, and seed.
+DATASETS=(gsm8k math humaneval)
 N_DATASETS=${#DATASETS[@]}
 # Cap GPUs per stage at N_DATASETS — extra GPUs would be idle inside a
 # stage. The user-specified NUM_GPUS still controls how many we are
