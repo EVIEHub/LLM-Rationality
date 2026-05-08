@@ -105,8 +105,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="H2 cell runner")
     parser.add_argument("--model", required=True)
     parser.add_argument(
-        "--dataset", required=True, choices=["gsm8k", "math"],
-        help="HumanEval is excluded from H2; see HANDOFF §6.",
+        "--dataset", required=True, choices=["gsm8k", "math", "humaneval"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64)

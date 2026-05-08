@@ -7,9 +7,16 @@ pipeline can swap them in without further changes.
 
 Currently implemented:
     budget_forced(...)       — H4: s1-style two-stage budget forcing.
+    direct_sample(...)       — H3: single-shot sampling at fixed temperature
+                                (greedy at tau=0, low-entropy at 0.7,
+                                full-entropy at 1.0).
 
-Not implemented (skipped per HANDOFF.md plan C):
-    cot, self_consistency, mcts, direct_t0, direct_t07
+Not implemented:
+    self_consistency (the post-hoc voting variant lives in
+        src.metrics.h3 because it consumes cached K samples without
+        new GPU work; a "live" SC procedure that samples n on demand
+        is a wrapper around direct_sample at tau=1 + the same voter).
+    mcts (out of scope for the H3 MVP).
 """
 
 from __future__ import annotations
@@ -103,3 +110,49 @@ def budget_forced(
             idx += 1
         output.append(cell)
     return output
+
+
+def direct_sample(
+    runner: VllmRunner,
+    prompts: list[str],
+    K: int,
+    seed: int,
+    *,
+    temperature: float,
+    max_tokens: int = 1024,
+    top_p: float = 1.0,
+    top_k: int = -1,
+) -> list[list[str]]:
+    """Direct single-shot sampling at a fixed temperature.
+
+    Used for H3 to evaluate the deployable inference procedures
+    "single greedy decode" (tau=0), "low-entropy sampling" (tau=0.7),
+    and "full-entropy sampling" (tau=1.0). At tau=0 the call is
+    deterministic, so K=1 is the natural budget; at tau>0, K can be
+    increased to drive an SC voting procedure (see
+    :mod:`src.metrics.h3`).
+
+    Args:
+        runner: VllmRunner with the model loaded.
+        prompts: M prompt strings.
+        K: per-prompt sample budget. Use K=1 for a single decode.
+        seed: base RNG seed (forwarded to vLLM).
+        temperature: sampling temperature. Use 0.0 for greedy decoding.
+            vLLM short-circuits the sampler when temperature == 0,
+            making top_p / top_k irrelevant.
+        max_tokens: per-sample generation cap. Default 1024 matches H1.
+        top_p, top_k: nucleus / top-k filters. vLLM's defaults
+            (top_p=1.0, top_k=-1) disable both, matching H1's setup.
+
+    Returns:
+        ``(M, K)`` list-of-lists of strings, one per (prompt, k).
+    """
+    if temperature < 0:
+        raise ValueError(f"temperature must be >= 0, got {temperature}")
+    cfg = SamplingConfig(
+        temperature=temperature,
+        top_p=top_p,
+        top_k=top_k,
+        max_tokens=max_tokens,
+    )
+    return runner.sample(prompts, K=K, seed=seed, config=cfg)

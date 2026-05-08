@@ -22,7 +22,15 @@
       "Bash(ssh -p 34240 -o StrictHostKeyChecking=no root@connect.nma1.seetacloud.com 'extract_progress\\(\\) { *)",
       "Bash(ssh -p *)",
       "Bash(bash -n /tmp/h2_humaneval_addendum.sh)",
-      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/h2_humaneval_addendum.sh root@connect.nma1.seetacloud.com:/root/h2_humaneval_addendum.sh)"
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/h2_humaneval_addendum.sh root@connect.nma1.seetacloud.com:/root/h2_humaneval_addendum.sh)",
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/show_h4.py root@connect.nma1.seetacloud.com:/tmp/show_h4.py)",
+      "Bash(python -m pytest tests/test_h3.py tests/test_rational_gap.py tests/test_gsm8k_verifier.py tests/test_math_verifier.py -q)",
+      "Bash(python -m pytest tests/test_h3.py tests/test_rational_gap.py tests/test_verification_gsm8k.py tests/test_verification_math.py tests/test_inference_procedures.py -q)",
+      "Bash(python -m pytest tests/test_h3.py tests/test_rational_gap.py tests/test_gsm8k.py tests/test_math.py tests/test_inference_procedures.py -q)",
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/show_h3.py root@connect.nma1.seetacloud.com:/tmp/show_h3.py)",
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no src/metrics/h3.py scripts/run_h3.py tests/test_h3.py root@connect.nma1.seetacloud.com:/tmp/)",
+      "Bash(bash -n /tmp/sft_humaneval_retry.sh)",
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/sft_humaneval_retry.sh root@connect.nma1.seetacloud.com:/root/sft_humaneval_retry.sh)"
     ],
     "additionalDirectories": [
       "/tmp"
