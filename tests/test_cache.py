@@ -47,10 +47,20 @@ def test_fingerprint_differs_for_each_field(cache_key_factory) -> None:
         cache_key_factory(seed=43),
         cache_key_factory(prompt_template_version="v2"),
         cache_key_factory(num_prompts=500),
+        cache_key_factory(max_reasoning_length=128),
     ]
     fps = {p.fingerprint() for p in perturbations}
     assert base.fingerprint() not in fps
     assert len(fps) == len(perturbations), "every field-perturbation must give a unique fingerprint"
+
+
+def test_max_reasoning_length_None_is_distinct_from_zero(cache_key_factory) -> None:
+    """v3 invariant: max_reasoning_length=None ("no budget forcing") and
+    max_reasoning_length=0 ("budget forcing with 0 reasoning tokens") are
+    semantically different and must produce different fingerprints."""
+    none_key = cache_key_factory(max_reasoning_length=None)
+    zero_key = cache_key_factory(max_reasoning_length=0)
+    assert none_key.fingerprint() != zero_key.fingerprint()
 
 
 def test_int_and_float_canonicalised_for_temperature(cache_key_factory) -> None:
@@ -204,6 +214,7 @@ def test_read_detects_format_version_mismatch(tmp_path: Path, cache_key_factory)
                         seed=key.seed,
                         prompt_template_version=key.prompt_template_version,
                         num_prompts=key.num_prompts,
+                        max_reasoning_length=key.max_reasoning_length,
                     ),
                     "_format_version": CACHE_FORMAT_VERSION - 1,
                 }

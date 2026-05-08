@@ -1,0 +1,11 @@
+Problem: Find the sum of all integer values of $n$ such that $\frac{20}{2n-1}$ is an integer.
+Solution: For $\frac{20}{2n-1}$ to be an integer, the denominator $2n-1$ must be a divisor of 20. Since $2n-1$ is always odd, we restrict to the odd divisors of 20: $\pm 1$ and $\pm 5$. Solving $2n-1 = 1, -1, 5, -5$ gives $n = 1, 0, 3, -2$. The sum of these values is $1 + 0 + 3 + (-2) = \boxed{2}$.
+
+Problem: How many positive 3-digit integers have the property that all of their digits are different?
+Solution: The hundreds digit can be any of 9 values (1 through 9, since the leading digit cannot be 0). The tens digit can be any of the remaining 9 values (0 through 9, excluding the hundreds digit). The units digit can be any of the remaining 8 values. The total count is $9 \times 9 \times 8 = \boxed{648}$.
+
+Problem: A right cylinder has a height of 5 inches and a radius of 2 inches. What is the area of the curved surface of the cylinder, in square inches? Express your answer in terms of $\pi$.
+Solution: The curved (lateral) surface of a cylinder unrolls into a rectangle with width equal to the cylinder's height $h$ and length equal to its circumference $2\pi r$. The area is $2\pi r h = 2\pi \cdot 2 \cdot 5 = \boxed{20\pi}$.
+
+Problem: Compute $\sqrt{(31)(30)(29)(28)+1}$.
+Solution: Let $n = 29$. Then $(31)(30)(29)(28) = (n+2)(n+1)(n)(n-1) = (n^2+n)(n^2+n-2)$. Letting $m = n^2 + n$, this is $m(m-2) = m^2 - 2m$. So $(31)(30)(29)(28) + 1 = m^2 - 2m + 1 = (m-1)^2$, where $m - 1 = n^2 + n - 1 = 29^2 + 29 - 1 = 841 + 28 = 869$. The square root is $\boxed{869}$.

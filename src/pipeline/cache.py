@@ -37,6 +37,16 @@ from typing import Any, Iterable, Iterator
 CACHE_FORMAT_VERSION: int = 2
 
 
+# Optional fields whose default value is ``None``. When a field's value is
+# ``None``, we EXCLUDE it from the fingerprint and the on-disk header.
+# This makes new optional fields backward-compatible: an older cache file
+# that pre-dates the field still matches a new key whose value of that
+# field is ``None``. When the field is set to a non-None value (e.g. H4
+# uses ``max_reasoning_length=128``), the fingerprint changes and a new
+# cache file is written.
+_OPTIONAL_NONE_FIELDS = ("max_reasoning_length",)
+
+
 @dataclass(frozen=True)
 class CacheKey:
     """All parameters that affect sampling output.
@@ -56,6 +66,14 @@ class CacheKey:
             cache file. ``CACHE_FORMAT_VERSION`` bumped 1->2 so old
             v1 files (without num_prompts in their header) are not
             silently consumed by the new key shape.
+        v2.1 (2026-05-08): added optional ``max_reasoning_length`` for
+            H4 budget-forced sampling. ``None`` means "no budget
+            forcing" (H1/H2 default); integer values drive two-stage
+            budget forcing. CACHE_FORMAT_VERSION did NOT bump because
+            optional-with-default-None fields are backward-compatible:
+            a v2 file written before this change has the same
+            fingerprint as a key whose ``max_reasoning_length=None``.
+            See ``_OPTIONAL_NONE_FIELDS``.
     """
 
     model: str
@@ -68,6 +86,7 @@ class CacheKey:
     seed: int
     prompt_template_version: str
     num_prompts: int
+    max_reasoning_length: int | None = None
 
     def __post_init__(self) -> None:
         # Frozen-dataclass-safe canonicalisation of numeric types.
@@ -78,10 +97,27 @@ class CacheKey:
         object.__setattr__(self, "max_tokens", int(self.max_tokens))
         object.__setattr__(self, "seed", int(self.seed))
         object.__setattr__(self, "num_prompts", int(self.num_prompts))
+        if self.max_reasoning_length is not None:
+            object.__setattr__(self, "max_reasoning_length", int(self.max_reasoning_length))
+
+    def canonical_dict(self) -> dict[str, Any]:
+        """Return the dict used for fingerprinting and on-disk header.
+
+        Drops ``_OPTIONAL_NONE_FIELDS`` whose value is ``None``, so a key
+        that uses default values for every optional field is fingerprint-
+        equivalent to a key from a CacheKey schema that did not yet have
+        the optional fields. Required for backward compatibility across
+        schema additions of optional fields.
+        """
+        d = asdict(self)
+        for name in _OPTIONAL_NONE_FIELDS:
+            if d.get(name) is None:
+                d.pop(name, None)
+        return d
 
     def fingerprint(self) -> str:
         """Stable 16-hex-char SHA-256 digest of the canonical key."""
-        canonical = json.dumps(asdict(self), sort_keys=True, separators=(",", ":"))
+        canonical = json.dumps(self.canonical_dict(), sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 
@@ -147,8 +183,11 @@ def write_cache(
     tmp = path.parent / (path.name + ".tmp")
     try:
         with gzip.open(tmp, "wt", encoding="utf-8") as fh:
+            # Write the canonical dict (matching the fingerprint) so a
+            # later CacheKey schema with new optional fields can still
+            # validate the header without false key-mismatches.
             header = {
-                "_cache_key": asdict(key),
+                "_cache_key": key.canonical_dict(),
                 "_format_version": CACHE_FORMAT_VERSION,
             }
             fh.write(json.dumps(header, sort_keys=True) + "\n")
@@ -200,10 +239,11 @@ def read_cache(samples_dir: Path, key: CacheKey) -> Iterator[dict[str, Any]]:
                 f"current is {CACHE_FORMAT_VERSION}"
             )
         on_disk_key = header.get("_cache_key")
-        if on_disk_key != asdict(key):
+        expected = key.canonical_dict()
+        if on_disk_key != expected:
             raise ValueError(
                 f"Cache file {path} key mismatch: file recorded {on_disk_key}, "
-                f"caller asked for {asdict(key)}"
+                f"caller asked for {expected}"
             )
 
         for line in fh:

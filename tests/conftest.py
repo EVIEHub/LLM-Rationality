@@ -68,6 +68,7 @@ def cache_key_factory() -> Callable[..., CacheKey]:
             "seed": 42,
             "prompt_template_version": "v1",
             "num_prompts": 200,
+            "max_reasoning_length": None,
         }
         defaults.update(overrides)
         return CacheKey(**defaults)  # type: ignore[arg-type]

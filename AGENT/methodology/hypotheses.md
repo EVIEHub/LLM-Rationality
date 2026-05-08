@@ -13,6 +13,7 @@ The paper's headline definition: $\mathcal{R}(\pi_\theta) = \mathbb{E}_x[U(x, y^
 - $K=64$ is reported as a reference point with explicit acknowledgement that the magnitude depends on $K$.
 
 **H2 — independence from value alignment, reformulated as claim (b):** alignment does not *eliminate* the gap, even when $\bar{U}_K$ improves.
+- Trajectory studied: **SFT → DPO → RLVR** (3 post-SFT alignment stages, all in chat mode). Tulu-3-base (Llama-3.1-8B raw pretrained) was originally part of the design but **dropped on 2026-05-08** because it requires few-shot prompting while SFT/DPO/RLVR use chat mode, which would confound the trajectory comparison with prompt mode. The 3-stage post-SFT trajectory is sufficient to test the H2 claim without that confound.
 - Along SFT → DPO → RLVR: $\bar{U}_K$ should rise monotonically (alignment working).
 - $U^\circ_K$ may stagnate or decline in late stages (distributional sharpening narrows the reachable region).
 - $\hat{\mathcal{R}}_K$ may shrink, but if it shrinks because $U^\circ_K$ shrinks (rather than $\bar{U}_K$ catching up), that supports H2 in a particularly strong form.

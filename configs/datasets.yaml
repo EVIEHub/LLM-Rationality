@@ -52,13 +52,22 @@ gsm8k:
   prompt_template_version: "v1"
 
 math:
+  # NOTE on scope: EleutherAI/hendrycks_math is split into 7 sub-config
+  # categories (algebra, counting_and_probability, geometry,
+  # intermediate_algebra, number_theory, prealgebra, precalculus). The
+  # full 5000-problem MATH test set is the union across categories.
+  # We standardise on `algebra` for H1/H2/H4 — 1187 test problems is
+  # ample for prompt-bootstrap CIs and avoids needing a multi-config
+  # loader. Document this restriction in the paper. Switching to a
+  # different category later requires bumping prompt_template_version
+  # so old caches do not silently match.
   hf_id: "EleutherAI/hendrycks_math"
-  hf_config: null
+  hf_config: "algebra"
   split: "test"
   verifier: "math"
   prompt_field: "problem"
   ground_truth_field: "solution"
-  test_size: 5000
+  test_size: 1187
   templates:
     chat:
       system: "Solve the following math problem. Show your reasoning, then put your final answer in \\boxed{}."
