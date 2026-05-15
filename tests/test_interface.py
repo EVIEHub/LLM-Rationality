@@ -74,8 +74,11 @@ def test_unknown_dataset_error_lists_known_names() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_known_datasets_lists_all_three() -> None:
-    assert set(known_datasets()) == {"gsm8k", "math", "humaneval"}
+def test_known_datasets_lists_all_registered() -> None:
+    assert set(known_datasets()) == {
+        "gsm8k", "math", "humaneval",
+        "matharena", "livecodebench",
+    }
 
 
 def test_known_datasets_is_sorted_tuple() -> None:

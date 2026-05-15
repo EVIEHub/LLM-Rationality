@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Callable, Mapping
 
-from src.verification import gsm8k, humaneval
+from src.verification import gsm8k, humaneval, livecodebench, matharena
 from src.verification import math as math_verifier  # avoid shadowing stdlib name in callers
 
 
@@ -28,6 +28,8 @@ _REGISTRY: Mapping[str, Verifier] = {
     "gsm8k": gsm8k.verify,
     "math": math_verifier.verify,
     "humaneval": humaneval.verify,
+    "matharena": matharena.verify,
+    "livecodebench": livecodebench.verify,
 }
 
 

@@ -39,7 +39,7 @@ set -uo pipefail
 # restarts cheap.
 
 # shellcheck disable=SC1091
-source "$(dirname "$0")/_common.sh"
+source "$(dirname "$0")/../_common.sh"
 rg_parse_num_gpus "$@"
 set -- "${RG_POSITIONAL[@]}"
 rg_activate_env

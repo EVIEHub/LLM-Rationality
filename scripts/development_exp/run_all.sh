@@ -41,7 +41,7 @@
 set -uo pipefail
 
 # shellcheck disable=SC1091
-source "$(dirname "$0")/_common.sh"
+source "$(dirname "$0")/../_common.sh"
 rg_parse_num_gpus "$@"
 set -- "${RG_POSITIONAL[@]}"
 rg_activate_env
@@ -78,12 +78,13 @@ run_panel() {
 run_panel h1 "$(dirname "$0")/run_h1_panel.sh"
 run_panel h2 "$(dirname "$0")/run_h2_panel.sh"
 run_panel h4 "$(dirname "$0")/run_h4_panel.sh"
+run_panel h3 "$(dirname "$0")/run_h3_panel.sh"   # depends on H1 cache; runs last
 
 # -----------------------------------------------------------------------------
 # Plotting (CPU only, < 1 min).
 # -----------------------------------------------------------------------------
 rg_log "rendering figures..."
-for hyp in h1 h2 h4; do
+for hyp in h1 h2 h3 h4; do
     if python -m "src.plotting.plot_${hyp}" > "${LOG_DIR}/plot_${hyp}.log" 2>&1; then
         rg_log "plot_${hyp} OK"
     else

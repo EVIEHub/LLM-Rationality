@@ -81,6 +81,17 @@ def _format_chat_prompt(tokenizer: Any, system: str, user: str) -> str:
 
 
 def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
+    if ds_cfg.get("verifier") == "livecodebench":
+        public = row.get("public_test_cases", "[]")
+        private = row.get("private_test_cases", "[]")
+        try:
+            tests = json.loads(public) + json.loads(private)
+        except (json.JSONDecodeError, TypeError):
+            tests = []
+        return json.dumps({
+            "tests": tests,
+            "starter_code": row.get("starter_code", ""),
+        })
     gt = row[ds_cfg["ground_truth_field"]]
     if "entry_point_field" in ds_cfg:
         gt = gt + f"\ncheck({row[ds_cfg['entry_point_field']]})\n"
@@ -96,13 +107,32 @@ def _verify_matrix(
     log_tag: str,
     seed: int,
 ) -> np.ndarray:
-    """Return (M, K) utility array; logs every (prompt, k) verifier decision."""
+    """Return (M, K) utility array; logs every (prompt, k) verifier decision.
+
+    Parallelised across threads — same rationale as scripts/run_h1.py.
+    """
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
     M = len(samples_per_prompt)
     K = len(samples_per_prompt[0]) if M else 0
     util = np.zeros((M, K), dtype=float)
-    for i, samples in enumerate(samples_per_prompt):
-        for k, sample in enumerate(samples):
-            u = verify_dispatch(dataset, sample, ground_truths[i])
+    if M == 0:
+        return util
+
+    tasks = [
+        (i, k, sample, ground_truths[i])
+        for i, samples in enumerate(samples_per_prompt)
+        for k, sample in enumerate(samples)
+    ]
+
+    def _verify_task(t):
+        i, k, sample, gt = t
+        return i, k, verify_dispatch(dataset, sample, gt)
+
+    n_workers = min(32, (os.cpu_count() or 4))
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for i, k, u in pool.map(_verify_task, tasks):
             util[i, k] = u
             log_verifier_decision(
                 paths.logs_dir,
@@ -128,7 +158,10 @@ def _saturation_grid(K_max: int) -> list[int]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="H3 cell runner")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--dataset", required=True, choices=["gsm8k", "math", "humaneval"])
+    parser.add_argument(
+        "--dataset", required=True,
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench"],
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64,
                         help="Sampling budget per prompt for the chosen procedure.")
@@ -187,12 +220,39 @@ def main() -> None:
         )
 
     # --- load + slice dataset --------------------------------------------
-    ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
-    if ds_cfg.get("hf_config"):
-        ds_kwargs["name"] = ds_cfg["hf_config"]
-    raw_ds = load_dataset(**ds_kwargs)
+    if "subsets" in ds_cfg:
+        from datasets import Value, concatenate_datasets
+        parts = []
+        for subset in ds_cfg["subsets"]:
+            if ds_cfg.get("hf_id"):
+                part = load_dataset(ds_cfg["hf_id"], subset, split=ds_cfg["split"])
+            else:
+                part = load_dataset(subset, split=ds_cfg["split"])
+            for col in (ds_cfg.get("prompt_field"), ds_cfg.get("ground_truth_field")):
+                if col and col in part.features:
+                    feat = part.features[col]
+                    if not (isinstance(feat, Value) and feat.dtype == "string"):
+                        part = part.cast_column(col, Value("string"))
+            n = ds_cfg.get("prompts_per_subset")
+            if n is not None:
+                part = part.select(range(min(n, len(part))))
+            parts.append(part)
+        raw_ds = concatenate_datasets(parts)
+    else:
+        ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
+        if ds_cfg.get("hf_config"):
+            ds_kwargs["name"] = ds_cfg["hf_config"]
+        raw_ds = load_dataset(**ds_kwargs)
+    min_date = ds_cfg.get("min_contest_date")
+    if min_date is not None:
+        from datetime import datetime
+        cutoff = datetime.fromisoformat(min_date)
+        raw_ds = raw_ds.filter(
+            lambda r: r.get("contest_date") is not None
+                      and r["contest_date"] >= cutoff,
+        )
     if args.num_prompts is not None:
-        raw_ds = raw_ds.select(range(args.num_prompts))
+        raw_ds = raw_ds.select(range(min(args.num_prompts, len(raw_ds))))
     raw_inputs = [dict(row) for row in raw_ds]
     log.info("Using %d prompts", len(raw_inputs))
 

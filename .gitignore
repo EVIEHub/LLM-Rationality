@@ -14,3 +14,7 @@ venv/
 .vscode/
 .idea/
 .DS_Store
+
+# Locally rendered figures — regenerated from results JSONs via
+# src/plotting/plot_h{1,2,3,4}.py; never committed.
+outputs/figures/

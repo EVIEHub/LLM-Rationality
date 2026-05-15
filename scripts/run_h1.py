@@ -74,6 +74,25 @@ def _format_chat_prompt(tokenizer: Any, system: str, user: str) -> str:
 
 
 def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
+    """Build the verifier's ``ground_truth`` argument from a dataset row.
+
+    HumanEval: append ``check(<entry_point>)`` to the ``test`` field.
+    LiveCodeBench: bundle public + private test cases (parsed from
+        JSON-encoded strings) plus the ``starter_code`` field into a
+        single JSON blob the verifier can re-parse.
+    Everything else: just the raw ground-truth field.
+    """
+    if ds_cfg.get("verifier") == "livecodebench":
+        public = row.get("public_test_cases", "[]")
+        private = row.get("private_test_cases", "[]")
+        try:
+            tests = json.loads(public) + json.loads(private)
+        except (json.JSONDecodeError, TypeError):
+            tests = []
+        return json.dumps({
+            "tests": tests,
+            "starter_code": row.get("starter_code", ""),
+        })
     gt = row[ds_cfg["ground_truth_field"]]
     if "entry_point_field" in ds_cfg:
         gt = gt + f"\ncheck({row[ds_cfg['entry_point_field']]})\n"
@@ -91,7 +110,10 @@ def _saturation_grid(K_max: int) -> list[int]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="H1 cell runner")
     parser.add_argument("--model", required=True)
-    parser.add_argument("--dataset", required=True, choices=["gsm8k", "math", "humaneval"])
+    parser.add_argument(
+        "--dataset", required=True,
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench"],
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64, help="K_max; samples per prompt")
     parser.add_argument(
@@ -129,14 +151,65 @@ def main() -> None:
         )
 
     # --- load + slice dataset --------------------------------------------
-    ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
-    if ds_cfg.get("hf_config"):
-        ds_kwargs["name"] = ds_cfg["hf_config"]
-    log.info("Loading dataset: %s", ds_kwargs)
-    raw_ds = load_dataset(**ds_kwargs)
+    if "subsets" in ds_cfg:
+        # Multi-source dataset (e.g. MathArena: AIME 2025 + BRUMO 2025).
+        # Each entry in `subsets` is either:
+        #   - a config name to combine with ds_cfg["hf_id"], OR
+        #   - a full "org/dataset" path when ds_cfg["hf_id"] is null.
+        # Take prompts_per_subset from each split, then concatenate.
+        from datasets import Value, concatenate_datasets
+        parts = []
+        for subset in ds_cfg["subsets"]:
+            if ds_cfg.get("hf_id"):
+                log.info("Loading dataset: %s / %s / split=%s",
+                         ds_cfg["hf_id"], subset, ds_cfg["split"])
+                part = load_dataset(ds_cfg["hf_id"], subset, split=ds_cfg["split"])
+            else:
+                log.info("Loading dataset: %s / split=%s", subset, ds_cfg["split"])
+                part = load_dataset(subset, split=ds_cfg["split"])
+            # Different subsets can have different inferred types for the
+            # same field (e.g. AIME 2025's `answer` is int64, BRUMO 2025's
+            # is string). Coerce the prompt + ground-truth columns to
+            # string so concatenate_datasets succeeds; the verifier reads
+            # them as strings anyway.
+            for col in (ds_cfg.get("prompt_field"), ds_cfg.get("ground_truth_field")):
+                if col and col in part.features:
+                    feat = part.features[col]
+                    if not (isinstance(feat, Value) and feat.dtype == "string"):
+                        part = part.cast_column(col, Value("string"))
+            n = ds_cfg.get("prompts_per_subset")
+            if n is not None:
+                part = part.select(range(min(n, len(part))))
+            parts.append(part)
+        raw_ds = concatenate_datasets(parts)
+    else:
+        ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
+        if ds_cfg.get("hf_config"):
+            ds_kwargs["name"] = ds_cfg["hf_config"]
+        log.info("Loading dataset: %s", ds_kwargs)
+        raw_ds = load_dataset(**ds_kwargs)
+    # Optional date filter — used by LiveCodeBench to keep only
+    # post-cutoff problems for contamination-resistant evaluation.
+    min_date = ds_cfg.get("min_contest_date")
+    if min_date is not None:
+        from datetime import datetime
+        cutoff = datetime.fromisoformat(min_date)
+        n_before = len(raw_ds)
+        raw_ds = raw_ds.filter(
+            lambda r: r.get("contest_date") is not None
+                      and r["contest_date"] >= cutoff,
+        )
+        log.info("min_contest_date=%s filter: %d -> %d",
+                 min_date, n_before, len(raw_ds))
     if args.num_prompts is not None:
-        raw_ds = raw_ds.select(range(args.num_prompts))
+        raw_ds = raw_ds.select(range(min(args.num_prompts, len(raw_ds))))
     raw_inputs = [dict(row) for row in raw_ds]
+    # Decode byte-string fields (some HF datasets return bytes). Apply
+    # to known string fields only.
+    for row in raw_inputs:
+        for f in (ds_cfg.get("prompt_field"), ds_cfg.get("ground_truth_field")):
+            if f and isinstance(row.get(f), (bytes, bytearray)):
+                row[f] = row[f].decode("utf-8")
     log.info("Using %d prompts", len(raw_inputs))
 
     key = CacheKey(
@@ -213,19 +286,42 @@ def main() -> None:
         )
 
     # --- verify ----------------------------------------------------------
+    # Verification is parallelised across threads for code-execution
+    # verifiers (HumanEval, LiveCodeBench) where each call spawns its own
+    # subprocess and is dominated by I/O wait. Pure-Python verifiers
+    # (gsm8k, math, matharena) also benefit from parallel CPU work on the
+    # M*K pairs at no correctness cost.
+    #
+    # Per AGENT.md §3.3 every verifier decision is logged. log_verifier_
+    # decision appends single short JSON lines (< PIPE_BUF), so concurrent
+    # appends from threads are atomic.
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
     M = len(records)
     log.info("Verifying %d (prompt, sample) pairs", M * args.K)
     utility = np.zeros((M, args.K), dtype=float)
+
+    tasks: list[tuple[int, int, str, str, str]] = []
     for i, rec in enumerate(records):
         for k, sample in enumerate(rec["samples"]):
-            u = verify_dispatch(args.dataset, sample, rec["ground_truth"])
+            tasks.append((i, k, sample, rec["ground_truth"], rec["prompt_id"]))
+
+    def _verify_task(t: tuple[int, int, str, str, str]) -> tuple[int, int, float, str]:
+        i, k, sample, gt, prompt_id = t
+        return i, k, verify_dispatch(args.dataset, sample, gt), prompt_id
+
+    n_workers = min(32, (os.cpu_count() or 4))
+    log.info("Verifying with %d worker threads", n_workers)
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for i, k, u, prompt_id in pool.map(_verify_task, tasks):
             utility[i, k] = u
             log_verifier_decision(
                 paths.logs_dir,
                 args.dataset,
                 {
                     "experiment": experiment,
-                    "prompt_id": rec["prompt_id"],
+                    "prompt_id": prompt_id,
                     "k": k,
                     "utility": u,
                     "seed": args.seed,

@@ -36,6 +36,7 @@ import numpy as np
 
 from src.verification import gsm8k as gsm8k_verifier
 from src.verification import math as math_verifier
+from src.verification import matharena as matharena_verifier
 
 
 # Per-dataset answer-key extractor. Maps a generation string to a hashable
@@ -68,9 +69,19 @@ def _extract_math_key(text: str) -> Optional[str]:
     return "".join(raw.split())
 
 
+def _extract_matharena_key(text: str) -> Optional[str]:
+    # MathArena uses the same \\boxed{} convention as MATH; reuse the
+    # matharena verifier's extractor (which is brace-balanced).
+    raw = matharena_verifier._extract_last_boxed(text)
+    if raw is None:
+        return None
+    return "".join(raw.split())
+
+
 _KEY_EXTRACTORS: dict[str, Callable[[str], Optional[object]]] = {
     "gsm8k": _extract_gsm8k_key,
     "math": _extract_math_key,
+    "matharena": _extract_matharena_key,
 }
 
 

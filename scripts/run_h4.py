@@ -85,8 +85,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="H4 cell runner")
     parser.add_argument("--model", default="tulu3-8b-rlvr",
                         help="H4 default is Tulu-3-RLVR; rebuild cache if changed.")
-    parser.add_argument("--dataset", required=True, choices=["gsm8k", "math"],
-                        help="HumanEval is excluded from H4.")
+    parser.add_argument(
+        "--dataset", required=True, choices=["gsm8k", "math", "matharena"],
+        help="HumanEval / LiveCodeBench excluded — budget-forced 'Final answer:' "
+             "procedure is meaningful only on math-style benchmarks.",
+    )
     parser.add_argument("--L", type=int, required=True,
                         help="max_reasoning_length (0, 64, 128, 256, 512, 1024, 2048).")
     parser.add_argument("--seed", type=int, default=0)
@@ -129,11 +132,35 @@ def main() -> None:
     total_max_tokens = args.L + args.answer_max_tokens
 
     # --- load + slice dataset --------------------------------------------
-    ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
-    if ds_cfg.get("hf_config"):
-        ds_kwargs["name"] = ds_cfg["hf_config"]
-    log.info("Loading dataset: %s", ds_kwargs)
-    raw_ds = load_dataset(**ds_kwargs).select(range(args.num_prompts))
+    if "subsets" in ds_cfg:
+        # Multi-source dataset (e.g. MathArena = AIME 2025 + BRUMO 2025).
+        from datasets import Value, concatenate_datasets
+        parts = []
+        for subset in ds_cfg["subsets"]:
+            if ds_cfg.get("hf_id"):
+                part = load_dataset(ds_cfg["hf_id"], subset, split=ds_cfg["split"])
+            else:
+                part = load_dataset(subset, split=ds_cfg["split"])
+            # Cast string-typed fields to a common type so concat works
+            # when subsets infer different types (e.g. AIME's int answer
+            # vs BRUMO's string answer).
+            for col in (ds_cfg.get("prompt_field"), ds_cfg.get("ground_truth_field")):
+                if col and col in part.features:
+                    feat = part.features[col]
+                    if not (isinstance(feat, Value) and feat.dtype == "string"):
+                        part = part.cast_column(col, Value("string"))
+            n = ds_cfg.get("prompts_per_subset")
+            if n is not None:
+                part = part.select(range(min(n, len(part))))
+            parts.append(part)
+        raw_ds = concatenate_datasets(parts)
+    else:
+        ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
+        if ds_cfg.get("hf_config"):
+            ds_kwargs["name"] = ds_cfg["hf_config"]
+        log.info("Loading dataset: %s", ds_kwargs)
+        raw_ds = load_dataset(**ds_kwargs)
+    raw_ds = raw_ds.select(range(min(args.num_prompts, len(raw_ds))))
     raw_inputs = [dict(row) for row in raw_ds]
     log.info("Using %d prompts", len(raw_inputs))
 

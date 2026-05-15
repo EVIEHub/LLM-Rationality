@@ -77,6 +77,57 @@ math:
       user_template: "Problem: {problem}\nSolution:"
   prompt_template_version: "v1"
 
+matharena:
+  # Deployment-experiment math dataset (Beurer-Kellner et al., ETH 2025).
+  # Competition-math problems from contests held in 2025 — definitively
+  # post-cutoff for the models we evaluate (Tulu-3-8B, Qwen2.5-7B,
+  # Llama-3.1-8B all train on data through late 2023 / mid 2024). Two
+  # subsets (AIME 2025 + BRUMO 2025) combined for 60 problems. Both have
+  # the same schema: integer or short symbolic answer per problem,
+  # verifiable via math-verify.
+  #
+  # `subsets` here lists full HF dataset paths (each is its own dataset
+  # entry on the Hub; MathArena is an organisation, not a multi-config
+  # dataset). The loader treats each subset as a standalone dataset
+  # name and concatenates the resulting splits.
+  hf_id: null
+  subsets:
+    - "MathArena/aime_2025"
+    - "MathArena/brumo_2025"
+  prompts_per_subset: 30
+  split: "train"
+  verifier: "matharena"
+  prompt_field: "problem"
+  ground_truth_field: "answer"
+  test_size: 60
+  templates:
+    chat:
+      system: "Solve the following competition math problem. Show your reasoning step-by-step, then put your final answer inside \\boxed{}."
+      user_template: "{problem}"
+  prompt_template_version: "v1"
+
+livecodebench:
+  # Deployment-experiment code dataset (Jain et al., LiveCodeBench 2024).
+  # Competitive-programming problems from AtCoder and LeetCode with
+  # time-stamped release dates. We filter to contest_date >= 2024-01-01
+  # to retain only post-cutoff problems for the models we evaluate
+  # (Llama-3.1-8B is clearly unseen; Tulu-3-8B and Qwen2.5-7B are
+  # borderline depending on training cutoff). Yields 75 problems with a
+  # mix of stdin and functional test formats.
+  hf_id: "livecodebench/code_generation"
+  hf_config: null
+  split: "test"
+  min_contest_date: "2024-01-01"
+  verifier: "livecodebench"
+  prompt_field: "question_content"
+  ground_truth_field: "test_cases_json"     # synthesised at load time; see run_h1.py
+  test_size: 75
+  templates:
+    chat:
+      system: "Write a complete Python solution to the following problem. Return ONLY the code — no explanation, no markdown fences. Use stdin/stdout for input/output if the problem describes them; otherwise complete the starter code as specified."
+      user_template: "{question_content}"
+  prompt_template_version: "v1"
+
 humaneval:
   hf_id: "openai/openai_humaneval"
   hf_config: null

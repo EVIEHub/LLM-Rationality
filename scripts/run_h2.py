@@ -88,6 +88,17 @@ def _format_few_shot_prompt(examples_text: str, user: str) -> str:
 
 
 def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
+    if ds_cfg.get("verifier") == "livecodebench":
+        public = row.get("public_test_cases", "[]")
+        private = row.get("private_test_cases", "[]")
+        try:
+            tests = json.loads(public) + json.loads(private)
+        except (json.JSONDecodeError, TypeError):
+            tests = []
+        return json.dumps({
+            "tests": tests,
+            "starter_code": row.get("starter_code", ""),
+        })
     gt = row[ds_cfg["ground_truth_field"]]
     if "entry_point_field" in ds_cfg:
         gt = gt + f"\ncheck({row[ds_cfg['entry_point_field']]})\n"
@@ -105,7 +116,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="H2 cell runner")
     parser.add_argument("--model", required=True)
     parser.add_argument(
-        "--dataset", required=True, choices=["gsm8k", "math", "humaneval"],
+        "--dataset", required=True,
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64)
@@ -141,13 +153,41 @@ def main() -> None:
     log.info("Model %s uses prompt_mode=%s", args.model, prompt_mode)
 
     # --- load + slice dataset --------------------------------------------
-    ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
-    if ds_cfg.get("hf_config"):
-        ds_kwargs["name"] = ds_cfg["hf_config"]
-    log.info("Loading dataset: %s", ds_kwargs)
-    raw_ds = load_dataset(**ds_kwargs)
+    if "subsets" in ds_cfg:
+        from datasets import Value, concatenate_datasets
+        parts = []
+        for subset in ds_cfg["subsets"]:
+            if ds_cfg.get("hf_id"):
+                part = load_dataset(ds_cfg["hf_id"], subset, split=ds_cfg["split"])
+            else:
+                part = load_dataset(subset, split=ds_cfg["split"])
+            for col in (ds_cfg.get("prompt_field"), ds_cfg.get("ground_truth_field")):
+                if col and col in part.features:
+                    feat = part.features[col]
+                    if not (isinstance(feat, Value) and feat.dtype == "string"):
+                        part = part.cast_column(col, Value("string"))
+            n = ds_cfg.get("prompts_per_subset")
+            if n is not None:
+                part = part.select(range(min(n, len(part))))
+            parts.append(part)
+        raw_ds = concatenate_datasets(parts)
+    else:
+        ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
+        if ds_cfg.get("hf_config"):
+            ds_kwargs["name"] = ds_cfg["hf_config"]
+        log.info("Loading dataset: %s", ds_kwargs)
+        raw_ds = load_dataset(**ds_kwargs)
+    # Optional date filter (LiveCodeBench: keep only post-cutoff items).
+    min_date = ds_cfg.get("min_contest_date")
+    if min_date is not None:
+        from datetime import datetime
+        cutoff = datetime.fromisoformat(min_date)
+        raw_ds = raw_ds.filter(
+            lambda r: r.get("contest_date") is not None
+                      and r["contest_date"] >= cutoff,
+        )
     if args.num_prompts is not None:
-        raw_ds = raw_ds.select(range(args.num_prompts))
+        raw_ds = raw_ds.select(range(min(args.num_prompts, len(raw_ds))))
     raw_inputs = [dict(row) for row in raw_ds]
     log.info("Using %d prompts", len(raw_inputs))
 
@@ -249,19 +289,34 @@ def main() -> None:
         )
 
     # --- verify ---------------------------------------------------------
+    # Parallelised across threads — same rationale as scripts/run_h1.py.
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
     M = len(records)
     log.info("Verifying %d (prompt, sample) pairs", M * args.K)
     utility = np.zeros((M, args.K), dtype=float)
+
+    tasks: list[tuple[int, int, str, str, str]] = []
     for i, rec in enumerate(records):
         for k, sample in enumerate(rec["samples"]):
-            u = verify_dispatch(args.dataset, sample, rec["ground_truth"])
+            tasks.append((i, k, sample, rec["ground_truth"], rec["prompt_id"]))
+
+    def _verify_task(t: tuple[int, int, str, str, str]) -> tuple[int, int, float, str]:
+        i, k, sample, gt, prompt_id = t
+        return i, k, verify_dispatch(args.dataset, sample, gt), prompt_id
+
+    n_workers = min(32, (os.cpu_count() or 4))
+    log.info("Verifying with %d worker threads", n_workers)
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        for i, k, u, prompt_id in pool.map(_verify_task, tasks):
             utility[i, k] = u
             log_verifier_decision(
                 paths.logs_dir,
                 args.dataset,
                 {
                     "experiment": experiment,
-                    "prompt_id": rec["prompt_id"],
+                    "prompt_id": prompt_id,
                     "k": k,
                     "utility": u,
                     "seed": args.seed,

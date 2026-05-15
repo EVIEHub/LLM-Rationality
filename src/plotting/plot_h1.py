@@ -1,10 +1,16 @@
 """H1 figure — saturation curves of $\\hat{\\mathcal{R}}_K$ vs $K$.
 
 Reads ``${results_dir}/h1/<model>_<dataset>_seed<S>.json`` files and
-renders a (M_models × N_datasets) grid of subplots. Each subplot shows:
+renders one (M_models × N_datasets) subplot grid PER experiment scope.
+Each subplot shows:
 - the per-K curve from the cell's ``saturation_curve`` field;
 - an errorbar at $K=K_{\\max}$ from the bootstrap CI in
   ``bootstrap_R_hat_K_at_K_max``.
+
+Output files:
+- ``h1_saturation_development.pdf/.png`` — gsm8k, math, humaneval
+- ``h1_saturation_deployment.pdf/.png``  — matharena, livecodebench
+(only emits the figure if any cells from that scope exist).
 
 Usage:
     python -m src.plotting.plot_h1
@@ -14,29 +20,31 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 
 from src.pipeline.paths import load_paths
+from src.plotting._common import SCOPE_DATASETS, datasets_in_scope, split_cells_by_scope
 
 
-def main() -> None:
-    paths = load_paths()
-    h1_dir = paths.results_dir / "h1"
-    figures_dir = paths.results_dir / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
+def _render_scope(
+    scope: str,
+    cells: list[dict[str, Any]],
+    figures_dir: Path,
+) -> Path | None:
+    """Render the H1 saturation grid for one experiment scope; return PDF path."""
+    if not cells:
+        print(f"  scope {scope!r}: no cells, skipping figure")
+        return None
 
-    results = []
-    for json_path in sorted(h1_dir.glob("*_seed*.json")):
-        results.append(json.loads(json_path.read_text()))
-
-    if not results:
-        raise SystemExit(f"No results JSONs found in {h1_dir}")
-
-    models = sorted({r["model"] for r in results})
-    datasets = sorted({r["dataset"] for r in results})
+    models = sorted({r["model"] for r in cells})
+    datasets = datasets_in_scope(scope, cells)
     n_m, n_d = len(models), len(datasets)
-    print(f"Found {len(results)} cells: {n_m} models × {n_d} datasets")
+    print(
+        f"  scope {scope!r}: {len(cells)} cells = {n_m} models × "
+        f"{n_d} datasets ({', '.join(datasets)})"
+    )
 
     fig, axes = plt.subplots(
         n_m, n_d,
@@ -45,7 +53,7 @@ def main() -> None:
         squeeze=False,
     )
 
-    for r in results:
+    for r in cells:
         i = models.index(r["model"])
         j = datasets.index(r["dataset"])
         ax = axes[i, j]
@@ -87,28 +95,48 @@ def main() -> None:
             ax.legend(fontsize=8, loc="best")
 
     fig.suptitle(
-        r"H1 — Saturation of $\hat{\mathcal{R}}_K$ vs $K$  (seed=0; "
-        r"errorbar = 95% bootstrap CI over prompts at $K_{\max}$)",
+        r"H1 (" + scope + r") — Saturation of $\hat{\mathcal{R}}_K$ vs $K$  "
+        r"(seed=0; errorbar = 95% bootstrap CI over prompts at $K_{\max}$)",
         fontsize=11,
     )
     fig.tight_layout()
     fig.subplots_adjust(top=0.93)
 
-    pdf_path = figures_dir / "h1_saturation.pdf"
-    png_path = figures_dir / "h1_saturation.png"
+    pdf_path = figures_dir / f"h1_saturation_{scope}.pdf"
+    png_path = figures_dir / f"h1_saturation_{scope}.png"
     fig.savefig(pdf_path, bbox_inches="tight")
     fig.savefig(png_path, bbox_inches="tight", dpi=120)
     plt.close(fig)
-    print(f"Wrote {pdf_path}\nWrote {png_path}")
+    print(f"  Wrote {pdf_path}")
+    return pdf_path
 
-    # Also dump a cross-cell summary table to stdout.
+
+def main() -> None:
+    paths = load_paths()
+    h1_dir = paths.results_dir / "h1"
+    figures_dir = paths.results_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    for json_path in sorted(h1_dir.glob("*_seed*.json")):
+        results.append(json.loads(json_path.read_text()))
+
+    if not results:
+        raise SystemExit(f"No results JSONs found in {h1_dir}")
+
+    by_scope = split_cells_by_scope(results)
+    print(f"Loaded {len(results)} H1 cells; splitting by experiment scope:")
+    for scope in SCOPE_DATASETS:
+        _render_scope(scope, by_scope[scope], figures_dir)
+
+    # Cross-scope summary table to stdout.
     print()
     print("=== H1 summary (at K_max) ===")
-    print(f"{'model':<28} {'dataset':<12} {'U_circ':>8} {'U_bar':>8} {'R_hat':>8} {'CI low':>8} {'CI high':>8}")
-    for r in results:
+    print(f"{'model':<28} {'dataset':<14} {'U_circ':>8} {'U_bar':>8} {'R_hat':>8} {'CI low':>8} {'CI high':>8}")
+    for r in sorted(results, key=lambda r: (r["model"], r["dataset"])):
         agg = r["aggregates_at_K_max"]
         ci = r["bootstrap_R_hat_K_at_K_max"]
-        print(f"{r['model']:<28} {r['dataset']:<12} "
+        print(f"{r['model']:<28} {r['dataset']:<14} "
               f"{agg['U_circ_K']:>8.3f} {agg['U_bar_K']:>8.3f} "
               f"{agg['R_hat_K']:>8.3f} {ci['ci_low']:>8.3f} {ci['ci_high']:>8.3f}")
 

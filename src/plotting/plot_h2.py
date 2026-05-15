@@ -1,4 +1,4 @@
-"""H2 figure — Tulu-3 trajectory: U_circ_K vs U_bar_K along base→SFT→DPO→RLVR.
+"""H2 figure — Tulu-3 trajectory: U_circ_K vs U_bar_K along SFT→DPO→RLVR.
 
 Per ``methodology/hypotheses.md``: H2 tests claim (b), that alignment
 does NOT eliminate the gap. The figure must show $U^\\circ_K$ and
@@ -6,7 +6,8 @@ $\\bar{U}_K$ SEPARATELY across stages — not just the gap — so a reader
 can see whether a shrinking gap is due to $U^\\circ_K$ stagnating /
 falling (sharpening) or $\\bar{U}_K$ catching up (alignment working).
 
-Reads ``${results_dir}/h2/<model>_<dataset>_seed<S>.json``.
+Reads ``${results_dir}/h2/<model>_<dataset>_seed<S>.json``. Emits one
+figure per experiment scope (``development`` and ``deployment``).
 
 Usage:
     python -m src.plotting.plot_h2
@@ -16,37 +17,32 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from src.pipeline.paths import load_paths
+from src.plotting._common import SCOPE_DATASETS, datasets_in_scope, split_cells_by_scope
 
 # Post-SFT alignment trajectory only — base was excluded from H2 because
 # its few-shot prompting mode confounds the chat-mode SFT/DPO/RLVR
 # comparison (see AGENT/methodology/hypotheses.md, design note 2026-05-08).
 _TRAJECTORY_ORDER = ["sft", "dpo", "rlvr"]
-_TRAJECTORY_LABEL = {
-    "sft": "SFT",
-    "dpo": "DPO",
-    "rlvr": "RLVR",
-}
+_TRAJECTORY_LABEL = {"sft": "SFT", "dpo": "DPO", "rlvr": "RLVR"}
 
 
-def main() -> None:
-    paths = load_paths()
-    h2_dir = paths.results_dir / "h2"
-    figures_dir = paths.results_dir / "figures"
-    figures_dir.mkdir(parents=True, exist_ok=True)
+def _render_scope(
+    scope: str,
+    cells: list[dict[str, Any]],
+    figures_dir: Path,
+) -> Path | None:
+    if not cells:
+        print(f"  scope {scope!r}: no cells, skipping figure")
+        return None
 
-    results = []
-    for json_path in sorted(h2_dir.glob("*_seed*.json")):
-        results.append(json.loads(json_path.read_text()))
-    if not results:
-        raise SystemExit(f"No results JSONs found in {h2_dir}")
-
-    datasets = sorted({r["dataset"] for r in results})
-    print(f"Found {len(results)} cells across {len(datasets)} datasets")
+    datasets = datasets_in_scope(scope, cells)
+    print(f"  scope {scope!r}: {len(cells)} cells, datasets={datasets}")
 
     fig, axes = plt.subplots(
         1, len(datasets),
@@ -60,9 +56,8 @@ def main() -> None:
 
     for j, ds in enumerate(datasets):
         ax = axes[j]
-        # Index: stage -> agg
         per_stage: dict[str, dict] = {}
-        for r in results:
+        for r in cells:
             if r["dataset"] != ds:
                 continue
             stage = r.get("trajectory_stage")
@@ -85,7 +80,6 @@ def main() -> None:
         ax.bar(xs + bar_w/2, u_bars, bar_w, label=r"$\bar{U}_K$",
                color="C3", edgecolor="black", lw=0.5)
 
-        # Annotate gap as line connecting the two bars
         for k, s in enumerate(_TRAJECTORY_ORDER):
             if s in per_stage:
                 gap = per_stage[s]["R_hat_K"]
@@ -99,38 +93,56 @@ def main() -> None:
         ax.set_xlabel("trajectory stage")
         if j == 0:
             ax.set_ylabel(r"value at $K=K_{\max}$")
-        ax.set_title(f"{ds}  ($K_{{\\max}}$={results[0]['K_max']})", fontsize=10)
+        K_max = cells[0].get("K_max", 64)
+        ax.set_title(f"{ds}  ($K_{{\\max}}$={K_max})", fontsize=10)
         ax.set_ylim(0, 1.05)
         ax.grid(True, axis="y", alpha=0.3)
         if j == len(datasets) - 1:
             ax.legend(fontsize=9, loc="lower right")
 
     fig.suptitle(
-        "H2 — alignment trajectory: $U^\\circ_K$ vs $\\bar{U}_K$ "
-        "along base→SFT→DPO→RLVR  (Tulu-3-8B, seed=0)",
+        f"H2 ({scope}) — alignment trajectory: $U^\\circ_K$ vs $\\bar{{U}}_K$ "
+        f"along SFT→DPO→RLVR  (Tulu-3-8B, seed=0)",
         fontsize=11,
     )
     fig.tight_layout()
     fig.subplots_adjust(top=0.88)
 
-    pdf_path = figures_dir / "h2_trajectory.pdf"
-    png_path = figures_dir / "h2_trajectory.png"
+    pdf_path = figures_dir / f"h2_trajectory_{scope}.pdf"
+    png_path = figures_dir / f"h2_trajectory_{scope}.png"
     fig.savefig(pdf_path, bbox_inches="tight")
     fig.savefig(png_path, bbox_inches="tight", dpi=120)
     plt.close(fig)
-    print(f"Wrote {pdf_path}\nWrote {png_path}")
+    print(f"  Wrote {pdf_path}")
+    return pdf_path
 
-    # Cross-cell summary
+
+def main() -> None:
+    paths = load_paths()
+    h2_dir = paths.results_dir / "h2"
+    figures_dir = paths.results_dir / "figures"
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    results = []
+    for json_path in sorted(h2_dir.glob("*_seed*.json")):
+        results.append(json.loads(json_path.read_text()))
+    if not results:
+        raise SystemExit(f"No results JSONs found in {h2_dir}")
+
+    by_scope = split_cells_by_scope(results)
+    print(f"Loaded {len(results)} H2 cells; splitting by experiment scope:")
+    for scope in SCOPE_DATASETS:
+        _render_scope(scope, by_scope[scope], figures_dir)
+
     print()
     print("=== H2 summary (at K_max) ===")
-    print(f"{'stage':<8} {'dataset':<10} {'U_circ':>8} {'U_bar':>8} {'R_hat':>8}")
+    print(f"{'stage':<8} {'dataset':<14} {'U_circ':>8} {'U_bar':>8} {'R_hat':>8}")
     for stage in _TRAJECTORY_ORDER:
-        for ds in datasets:
-            for r in results:
-                if r.get("trajectory_stage") == stage and r["dataset"] == ds:
-                    a = r["aggregates_at_K_max"]
-                    print(f"{stage:<8} {ds:<10} {a['U_circ_K']:>8.3f} "
-                          f"{a['U_bar_K']:>8.3f} {a['R_hat_K']:>8.3f}")
+        for r in sorted(results, key=lambda r: r["dataset"]):
+            if r.get("trajectory_stage") == stage:
+                a = r["aggregates_at_K_max"]
+                print(f"{stage:<8} {r['dataset']:<14} {a['U_circ_K']:>8.3f} "
+                      f"{a['U_bar_K']:>8.3f} {a['R_hat_K']:>8.3f}")
 
 
 if __name__ == "__main__":

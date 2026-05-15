@@ -149,12 +149,16 @@ def test_every_dataset_verifier_resolves_in_registry(datasets_yaml) -> None:
         )
 
 
-def test_every_dataset_has_chat_and_few_shot_templates(datasets_yaml) -> None:
+def test_every_dataset_has_chat_template(datasets_yaml) -> None:
+    """All datasets must have a chat-mode template since every model we
+    evaluate in H1/H2/H3/H4 runs in chat mode. The few_shot template is
+    optional (only the original H1/H2 datasets carry it; deployment-
+    experiment datasets were added without one)."""
     for alias, entry in datasets_yaml.items():
         assert "chat" in entry["templates"], f"{alias} missing chat template"
-        assert "few_shot" in entry["templates"], f"{alias} missing few_shot template"
         assert "user_template" in entry["templates"]["chat"]
-        assert "user_template" in entry["templates"]["few_shot"]
+        if "few_shot" in entry["templates"]:
+            assert "user_template" in entry["templates"]["few_shot"]
 
 
 def test_humaneval_has_entry_point_field(datasets_yaml) -> None:
