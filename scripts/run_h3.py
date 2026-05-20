@@ -92,6 +92,16 @@ def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
             "tests": tests,
             "starter_code": row.get("starter_code", ""),
         })
+    if ds_cfg.get("verifier") == "self_judge":
+        # Preference reference y^+ is the assistant turn of `chosen`
+        # (UltraFeedback stores it as a list of role-content dicts).
+        chosen = row[ds_cfg["ground_truth_field"]]
+        if isinstance(chosen, list):
+            for msg in chosen:
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    return msg.get("content", "")
+            return ""
+        return str(chosen)
     gt = row[ds_cfg["ground_truth_field"]]
     if "entry_point_field" in ds_cfg:
         gt = gt + f"\ncheck({row[ds_cfg['entry_point_field']]})\n"
@@ -160,7 +170,7 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument(
         "--dataset", required=True,
-        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench"],
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64,
@@ -180,6 +190,10 @@ def main() -> None:
     parser.add_argument("--num-prompts", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--gpu-mem", type=float, default=0.85)
+    parser.add_argument(
+        "--api-concurrency", type=int, default=10,
+        help="Max in-flight requests for backend:api models (proxy rate-limit ceiling).",
+    )
     args = parser.parse_args()
 
     if args.procedure == "direct":
@@ -257,14 +271,29 @@ def main() -> None:
     log.info("Using %d prompts", len(raw_inputs))
 
     # --- format prompts --------------------------------------------------
-    tokenizer = AutoTokenizer.from_pretrained(model_cfg["hf_id"])
+    # backend:api models (H5 hosted subjects) have no local tokenizer —
+    # pass raw user text; the hosted endpoint applies its own template.
+    is_api = model_cfg.get("backend") == "api"
     chat_tmpl = ds_cfg["templates"]["chat"]
     prompt_field = ds_cfg["prompt_field"]
+    if is_api:
+        tokenizer = None
+        log.info("API backend (%s); skipping local tokenizer", model_cfg["hf_id"])
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_cfg["hf_id"])
     prompts: list[str] = []
+    raw_user_prompts: list[str] = []   # raw question text — needed by self_judge
     ground_truths: list[str] = []
     for row in raw_inputs:
-        user_text = chat_tmpl["user_template"].format(**{prompt_field: row[prompt_field]})
-        prompts.append(_format_chat_prompt(tokenizer, chat_tmpl["system"], user_text))
+        raw_q = row[prompt_field]
+        if isinstance(raw_q, (bytes, bytearray)):
+            raw_q = raw_q.decode("utf-8")
+        raw_user_prompts.append(str(raw_q))
+        user_text = chat_tmpl["user_template"].format(**{prompt_field: raw_q})
+        if is_api:
+            prompts.append(user_text)  # hosted model applies its own template
+        else:
+            prompts.append(_format_chat_prompt(tokenizer, chat_tmpl["system"], user_text))
         ground_truths.append(_assemble_ground_truth(row, ds_cfg))
 
     # ---------------------------------------------------------------------
@@ -295,20 +324,32 @@ def main() -> None:
         else:
             log.info("Cache miss — sampling K=%d at tau=%s", K_effective, args.tau)
             t0 = time.time()
-            with VllmRunner(
-                model_cfg["hf_id"],
-                gpu_memory_utilization=args.gpu_mem,
-                enforce_eager=True,
-            ) as runner:
-                samples_list = direct_sample(
-                    runner, prompts, K=K_effective, seed=args.seed,
-                    temperature=args.tau, max_tokens=args.max_tokens,
-                )
+            if is_api:
+                from src.sampling.api_runner import ApiModelSpec, ApiRunner
+                spec = ApiModelSpec.from_model_cfg(model_cfg)
+                resume_path = paths.samples_dir / f"apiresume_{key.fingerprint()}.jsonl"
+                log.info("API sampling: %d prompts x K=%d tau=%s, concurrency=%d, resume=%s",
+                         len(prompts), K_effective, args.tau, args.api_concurrency, resume_path)
+                with ApiRunner(
+                    spec, system=chat_tmpl["system"], resume_path=resume_path,
+                    concurrency=args.api_concurrency,
+                ) as runner:
+                    samples_list = direct_sample(
+                        runner, prompts, K=K_effective, seed=args.seed,
+                        temperature=args.tau, max_tokens=args.max_tokens,
+                    )
+            else:
+                with VllmRunner(
+                    model_cfg["hf_id"],
+                    gpu_memory_utilization=args.gpu_mem,
+                    enforce_eager=True,
+                ) as runner:
+                    samples_list = direct_sample(
+                        runner, prompts, K=K_effective, seed=args.seed,
+                        temperature=args.tau, max_tokens=args.max_tokens,
+                    )
             sample_seconds = time.time() - t0
-            log.info(
-                "Sampling done in %.1f s (%.2f GPU-hr)",
-                sample_seconds, sample_seconds / 3600,
-            )
+            log.info("Sampling done in %.1f s", sample_seconds)
             records = [
                 {
                     "prompt_id": f"{args.dataset}_{i}",
@@ -331,15 +372,67 @@ def main() -> None:
             )
 
         samples_per_prompt = [rec["samples"] for rec in records]
-        util = _verify_matrix(
-            samples_per_prompt, ground_truths, args.dataset,
-            paths=paths, log_tag=experiment, seed=args.seed,
-        )
+        if ds_cfg.get("verifier") == "self_judge":
+            # Preference mode: utility comes from a batched LLM judge, not
+            # a deterministic verifier. Strict-self — reload the same model
+            # as judge and score each (prompt, sample) vs the reference y^+.
+            if is_api:
+                raise SystemExit(
+                    "self_judge preference verification is not wired for "
+                    "backend:api models."
+                )
+            from src.verification.self_judge import score_matrix
+            L_judge = int(ds_cfg.get("judge_L", 5))
+            log.info(
+                "Preference mode: %d * %d * L=%d judge calls via vLLM",
+                len(samples_per_prompt), K_effective, L_judge,
+            )
+            with VllmRunner(
+                model_cfg["hf_id"],
+                gpu_memory_utilization=args.gpu_mem,
+                enforce_eager=True,
+            ) as judge_runner:
+                outcome = score_matrix(
+                    judge_runner=judge_runner,
+                    judge_tokenizer=tokenizer,
+                    raw_prompts=raw_user_prompts,
+                    candidates=samples_per_prompt,
+                    references=ground_truths,
+                    L=L_judge,
+                    seed=args.seed,
+                )
+            util = outcome.utility.astype(float)
+            log.info("Judge done: parse_failure_rate=%.4f, n_calls=%d",
+                     outcome.parse_failure_rate, outcome.n_judge_calls)
+            for i in range(len(samples_per_prompt)):
+                for k in range(K_effective):
+                    log_verifier_decision(
+                        paths.logs_dir, args.dataset,
+                        {
+                            "experiment": experiment,
+                            "prompt_id": f"{args.dataset}_{i}",
+                            "k": k,
+                            "utility": float(util[i, k]),
+                            "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                            "seed": args.seed,
+                        },
+                    )
+        else:
+            util = _verify_matrix(
+                samples_per_prompt, ground_truths, args.dataset,
+                paths=paths, log_tag=experiment, seed=args.seed,
+            )
 
     else:
         # SC procedure. Read the H1 K=64 cache (must exist), verify it
         # to get util_h1, then build the SC utility matrix as K bootstrap
         # draws of n underlying samples.
+        if ds_cfg.get("verifier") == "self_judge":
+            raise SystemExit(
+                "self-consistency (SC) is not defined for preference "
+                "(self_judge) datasets: SC aggregates over a deterministic "
+                "answer, which has no analogue in open-ended A/B judging."
+            )
         K_effective = args.K
         h1_key = CacheKey(
             model=model_cfg["hf_id"],

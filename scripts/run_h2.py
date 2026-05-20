@@ -88,6 +88,14 @@ def _format_few_shot_prompt(examples_text: str, user: str) -> str:
 
 
 def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
+    if ds_cfg.get("verifier") == "self_judge":
+        chosen = row[ds_cfg["ground_truth_field"]]
+        if isinstance(chosen, list):
+            for msg in chosen:
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    return msg.get("content", "")
+            return ""
+        return str(chosen)
     if ds_cfg.get("verifier") == "livecodebench":
         public = row.get("public_test_cases", "[]")
         private = row.get("private_test_cases", "[]")
@@ -117,7 +125,7 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument(
         "--dataset", required=True,
-        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench"],
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64)
@@ -211,12 +219,17 @@ def main() -> None:
 
     prompt_field = ds_cfg["prompt_field"]
     prompts: list[str] = []
+    raw_user_prompts: list[str] = []   # raw user question, used by self_judge verifier
     ground_truths: list[str] = []
 
     if prompt_mode == "chat":
         chat_tmpl = ds_cfg["templates"]["chat"]
         for row in raw_inputs:
-            user_text = chat_tmpl["user_template"].format(**{prompt_field: row[prompt_field]})
+            raw_q = row[prompt_field]
+            if isinstance(raw_q, (bytes, bytearray)):
+                raw_q = raw_q.decode("utf-8")
+            raw_user_prompts.append(str(raw_q))
+            user_text = chat_tmpl["user_template"].format(**{prompt_field: raw_q})
             prompts.append(_format_chat_prompt(tokenizer, chat_tmpl["system"], user_text))
             ground_truths.append(_assemble_ground_truth(row, ds_cfg))
     else:  # few_shot
@@ -234,7 +247,11 @@ def main() -> None:
         )
         user_template = fs_tmpl["user_template"]
         for row in raw_inputs:
-            user_text = user_template.format(**{prompt_field: row[prompt_field]})
+            raw_q = row[prompt_field]
+            if isinstance(raw_q, (bytes, bytearray)):
+                raw_q = raw_q.decode("utf-8")
+            raw_user_prompts.append(str(raw_q))
+            user_text = user_template.format(**{prompt_field: raw_q})
             prompts.append(_format_few_shot_prompt(examples_text, user_text))
             ground_truths.append(_assemble_ground_truth(row, ds_cfg))
 
@@ -289,39 +306,98 @@ def main() -> None:
         )
 
     # --- verify ---------------------------------------------------------
-    # Parallelised across threads — same rationale as scripts/run_h1.py.
-    import os
-    from concurrent.futures import ThreadPoolExecutor
-
+    # Two paths — preference mode (self-judge with FIXED Tulu-3-RLVR
+    # judge across all trajectory stages) vs verifier-binary.
+    #
+    # H2 deliberately uses a FIXED judge across SFT/DPO/RLVR rather than
+    # strict-self per stage: SFT models are weak at A/B parsing (refusal,
+    # verbose tangents, etc.) and would produce unreliable verdicts. By
+    # judging all three stages with the post-alignment Tulu-3-RLVR model
+    # we measure "the same judge's opinion across the trajectory", which
+    # is the scientific claim we can actually defend.
     M = len(records)
-    log.info("Verifying %d (prompt, sample) pairs", M * args.K)
-    utility = np.zeros((M, args.K), dtype=float)
+    samples_per_prompt = [rec["samples"] for rec in records]
 
-    tasks: list[tuple[int, int, str, str, str]] = []
-    for i, rec in enumerate(records):
-        for k, sample in enumerate(rec["samples"]):
-            tasks.append((i, k, sample, rec["ground_truth"], rec["prompt_id"]))
-
-    def _verify_task(t: tuple[int, int, str, str, str]) -> tuple[int, int, float, str]:
-        i, k, sample, gt, prompt_id = t
-        return i, k, verify_dispatch(args.dataset, sample, gt), prompt_id
-
-    n_workers = min(32, (os.cpu_count() or 4))
-    log.info("Verifying with %d worker threads", n_workers)
-    with ThreadPoolExecutor(max_workers=n_workers) as pool:
-        for i, k, u, prompt_id in pool.map(_verify_task, tasks):
-            utility[i, k] = u
-            log_verifier_decision(
-                paths.logs_dir,
-                args.dataset,
-                {
-                    "experiment": experiment,
-                    "prompt_id": prompt_id,
-                    "k": k,
-                    "utility": u,
-                    "seed": args.seed,
-                },
+    if ds_cfg.get("verifier") == "self_judge":
+        from src.verification.self_judge import score_matrix
+        L_judge = int(ds_cfg.get("judge_L", 5))
+        # FIXED judge — Tulu-3-RLVR (the post-alignment checkpoint).
+        judge_hf_id = "allenai/Llama-3.1-Tulu-3-8B"
+        judge_tokenizer = AutoTokenizer.from_pretrained(judge_hf_id)
+        log.info(
+            "Preference mode: %d * %d * L=%d = %d judge calls; "
+            "FIXED judge=%s (not generator=%s)",
+            M, args.K, L_judge, M * args.K * L_judge,
+            judge_hf_id, model_cfg["hf_id"],
+        )
+        with VllmRunner(
+            judge_hf_id,
+            gpu_memory_utilization=args.gpu_mem,
+            enforce_eager=True,
+        ) as judge_runner:
+            outcome = score_matrix(
+                judge_runner=judge_runner,
+                judge_tokenizer=judge_tokenizer,
+                raw_prompts=raw_user_prompts,
+                candidates=samples_per_prompt,
+                references=ground_truths,
+                L=L_judge,
+                seed=args.seed,
             )
+        utility = outcome.utility.astype(float)
+        log.info(
+            "Judge done: parse_failure_rate=%.4f, n_calls=%d",
+            outcome.parse_failure_rate, outcome.n_judge_calls,
+        )
+        for i in range(M):
+            for k in range(args.K):
+                log_verifier_decision(
+                    paths.logs_dir,
+                    args.dataset,
+                    {
+                        "experiment": experiment,
+                        "prompt_id": records[i]["prompt_id"],
+                        "k": k,
+                        "utility": float(utility[i, k]),
+                        "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "seed": args.seed,
+                    },
+                )
+
+    else:
+        # --- verifier-binary mode (existing path) ---
+        # Parallelised across threads — same rationale as scripts/run_h1.py.
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+
+        log.info("Verifying %d (prompt, sample) pairs", M * args.K)
+        utility = np.zeros((M, args.K), dtype=float)
+
+        tasks: list[tuple[int, int, str, str, str]] = []
+        for i, rec in enumerate(records):
+            for k, sample in enumerate(rec["samples"]):
+                tasks.append((i, k, sample, rec["ground_truth"], rec["prompt_id"]))
+
+        def _verify_task(t: tuple[int, int, str, str, str]) -> tuple[int, int, float, str]:
+            i, k, sample, gt, prompt_id = t
+            return i, k, verify_dispatch(args.dataset, sample, gt), prompt_id
+
+        n_workers = min(32, (os.cpu_count() or 4))
+        log.info("Verifying with %d worker threads", n_workers)
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            for i, k, u, prompt_id in pool.map(_verify_task, tasks):
+                utility[i, k] = u
+                log_verifier_decision(
+                    paths.logs_dir,
+                    args.dataset,
+                    {
+                        "experiment": experiment,
+                        "prompt_id": prompt_id,
+                        "k": k,
+                        "utility": u,
+                        "seed": args.seed,
+                    },
+                )
 
     # --- aggregate + saturation curve + bootstrap CI ---------------------
     est = compute_rational_gap(utility)

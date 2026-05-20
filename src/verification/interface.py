@@ -24,12 +24,30 @@ from src.verification import math as math_verifier  # avoid shadowing stdlib nam
 Verifier = Callable[[str, str], float]
 
 
+def _self_judge_marker(generation: str, ground_truth: str) -> float:
+    """Sentinel for the preference-mode verifier.
+
+    The actual self-judge logic is batched and needs a live vLLM runner;
+    it lives in :mod:`src.verification.self_judge`. Cell runners detect
+    ``ds_cfg['verifier'] == 'self_judge'`` and dispatch to
+    ``score_matrix(...)`` instead of calling this function. If you see
+    this exception, a verifier-binary code path was given a preference
+    dataset — bug.
+    """
+    raise NotImplementedError(
+        "self_judge is a batched preference verifier that requires a "
+        "VllmRunner; call src.verification.self_judge.score_matrix(...) "
+        "from the cell-runner preference branch instead of verify()."
+    )
+
+
 _REGISTRY: Mapping[str, Verifier] = {
     "gsm8k": gsm8k.verify,
     "math": math_verifier.verify,
     "humaneval": humaneval.verify,
     "matharena": matharena.verify,
     "livecodebench": livecodebench.verify,
+    "self_judge": _self_judge_marker,
 }
 
 

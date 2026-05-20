@@ -10,7 +10,7 @@
 #
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash scripts/deployment_exp/run_h2_panel.sh [--num-gpus N]
+#   bash scripts/h5_exp/run_h2_panel.sh [--num-gpus N]
 # -----------------------------------------------------------------------------
 
 set -uo pipefail
@@ -40,7 +40,7 @@ N_DATASETS=${#DATASETS[@]}
 GPUS_PER_STAGE=$(( NUM_GPUS < N_DATASETS ? NUM_GPUS : N_DATASETS ))
 
 PANEL_T0=$(date +%s)
-rg_log "=== deployment_exp H2 panel ==="
+rg_log "=== H5 (deployment) — H2-analysis panel ==="
 rg_log "Datasets:       ${DATASETS[*]}"
 rg_log "Seed:           ${SEED}"
 rg_log "GPUs available: ${NUM_GPUS}"
@@ -131,5 +131,5 @@ remove_model_cache "allenai/Llama-3.1-Tulu-3-8B-DPO"
 
 PANEL_DUR=$(( $(date +%s) - PANEL_T0 ))
 echo
-rg_log "=== deployment_exp H2 PANEL DONE in ${PANEL_DUR}s ($(awk "BEGIN{printf \"%.2f\", ${PANEL_DUR}/3600}") hr) ==="
+rg_log "=== H5 (deployment) H2 PANEL DONE in ${PANEL_DUR}s ($(awk "BEGIN{printf \"%.2f\", ${PANEL_DUR}/3600}") hr) ==="
 ls "${OUTPUTS_ROOT}/results/h2/" 2>/dev/null | grep -E "matharena|livecodebench"

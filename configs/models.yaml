@@ -73,6 +73,36 @@ llama3.1-8b-instruct:
   prompt_mode: "chat"
   supports_system_prompt: true
 
+# === H5 API subjects (closed-weight, hosted) ===
+# Generation via HTTP (no GPU); verification stays deterministic.
+# H1 (saturation) + H3 (procedures) only — H2 needs alignment-stage
+# checkpoints (unavailable) and H4 needs reasoning-budget control
+# (not exposed by hosted reasoning models).
+
+gpt-5.2-chat:
+  hf_id: "gpt-5.2-chat-latest"
+  family: "openai"
+  size_b: 0.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  backend: "api"
+  api_model: "gpt-5.2-chat-latest"
+  api_base_url_env: "TP_BASE_URL"
+  api_key_env: "TP_API_KEY"
+  notes: "Frontier hosted model via third-party proxy. H5 API subject (H1/H3 only). Caveat: ChatGPT-account proxy with a daily message quota — relies on ApiRunner per-(prompt,k) resume cache."
+
+deepseek-v4-flash:
+  hf_id: "deepseek-v4-flash"
+  family: "deepseek"
+  size_b: 0.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  backend: "api"
+  api_model: "deepseek-v4-flash"
+  api_base_url_env: "DS_BASE_URL"
+  api_key_env: "DS_API_KEY"
+  notes: "DeepSeek V4 Flash via official metered API (no quota cap). Pinned version => reproducible. Reasoning model: answer lands in message.content (ApiRunner reads it); needs high max_tokens (>=16000) so hard-problem reasoning finishes before emitting boxed answer. H5 API subject (H1/H3 only)."
+
 # === Smoke-test / fast-iteration models ===
 
 qwen2.5-1.5b-instruct:

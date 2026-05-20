@@ -128,6 +128,32 @@ livecodebench:
       user_template: "{question_content}"
   prompt_template_version: "v1"
 
+ultrafeedback:
+  # Preference-experiment dataset. The H4-Zephyr-style binarized fork of
+  # UltraFeedback: each row has (prompt, chosen, rejected) where `chosen`
+  # is the GPT-4-judged better response. We use `chosen` as the
+  # human-preferred reference y^+_i; samples drawn from a candidate model
+  # are then compared to this reference via an LLM judge (see
+  # src/verification/self_judge.py).
+  #
+  # Verifier `self_judge`: triggers the preference-mode code path in
+  # run_h{1,2}.py — the judge is the model itself (H1) or a fixed
+  # Tulu-3-RLVR judge (H2). Each (prompt, sample) pair is scored by L=5
+  # i.i.d. judge calls with random A/B position; majority over the L
+  # votes assigns ternary o in {0, 0.5, 1}.
+  hf_id: "HuggingFaceH4/ultrafeedback_binarized"
+  hf_config: null
+  split: "test_prefs"
+  verifier: "self_judge"
+  prompt_field: "prompt"
+  ground_truth_field: "chosen"      # the GPT-4-judged better response
+  test_size: 1000
+  templates:
+    chat:
+      system: ""                     # let each generator/judge use its own default
+      user_template: "{prompt}"
+  prompt_template_version: "v1"
+
 humaneval:
   hf_id: "openai/openai_humaneval"
   hf_config: null

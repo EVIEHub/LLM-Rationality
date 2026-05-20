@@ -16,21 +16,21 @@
 #
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash scripts/deployment_exp/run_h1_panel.sh [--num-gpus N] [model_alias ...]
+#   bash scripts/h5_exp/run_h1_panel.sh [--num-gpus N] [model_alias ...]
 #
 # Examples:
 #   # Auto-detect GPUs, full deployment panel (3 models)
-#   bash scripts/deployment_exp/run_h1_panel.sh
+#   bash scripts/h5_exp/run_h1_panel.sh
 #
 #   # Force 2 GPUs
-#   bash scripts/deployment_exp/run_h1_panel.sh --num-gpus 2
+#   bash scripts/h5_exp/run_h1_panel.sh --num-gpus 2
 #
 #   # Single-model sub-panel
-#   bash scripts/deployment_exp/run_h1_panel.sh tulu3-8b-rlvr
+#   bash scripts/h5_exp/run_h1_panel.sh tulu3-8b-rlvr
 #
 # Run inside tmux:
 #   tmux new-session -d -s dep_h1 \
-#       "bash scripts/deployment_exp/run_h1_panel.sh --num-gpus 2 \
+#       "bash scripts/h5_exp/run_h1_panel.sh --num-gpus 2 \
 #        > outputs/logs/dep_h1_panel.log 2>&1"
 # -----------------------------------------------------------------------------
 #
@@ -84,7 +84,7 @@ for d in "${DATASETS[@]}"; do
 done
 
 TOTAL_BATCHES=$(( (${#CELLS[@]} + NUM_GPUS - 1) / NUM_GPUS ))
-rg_log "=== deployment_exp H1 panel ==="
+rg_log "=== H5 (deployment) — H1-analysis panel ==="
 rg_log "Models:   ${MODELS[*]}"
 rg_log "Datasets: ${DATASETS[*]}"
 rg_log "Seeds:    ${SEEDS[*]}"
@@ -149,7 +149,7 @@ done
 PANEL_DUR=$(( $(date +%s) - PANEL_T0 ))
 GPU_HRS=$(awk "BEGIN{printf \"%.2f\", ${NUM_GPUS} * ${PANEL_DUR} / 3600}")
 echo
-rg_log "=== deployment_exp H1 PANEL DONE ==="
+rg_log "=== H5 (deployment) H1 PANEL DONE ==="
 rg_log "Wall time:        ${PANEL_DUR}s ($(awk "BEGIN{printf \"%.2f\", ${PANEL_DUR}/3600}") hr)"
 rg_log "GPU-hr billable:  ${GPU_HRS} (${NUM_GPUS} GPUs × wall hr)"
 echo

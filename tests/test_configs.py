@@ -98,6 +98,10 @@ def test_tulu_trajectory_stages_are_correctly_tagged(models_yaml) -> None:
 
 def test_size_b_is_positive(models_yaml) -> None:
     for alias, entry in models_yaml.items():
+        # Hosted (backend:api) closed-weight models have an unknown
+        # parameter count; size_b is a placeholder and not used for them.
+        if entry.get("backend") == "api":
+            continue
         assert entry["size_b"] > 0, f"{alias} has non-positive size_b: {entry['size_b']}"
 
 

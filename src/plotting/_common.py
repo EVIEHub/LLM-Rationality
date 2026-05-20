@@ -17,6 +17,7 @@ from typing import Any
 SCOPE_DATASETS: dict[str, list[str]] = {
     "development": ["gsm8k", "math", "humaneval"],
     "deployment":  ["matharena", "livecodebench"],
+    "preference":  ["ultrafeedback"],
 }
 
 

@@ -78,6 +78,7 @@ def test_known_datasets_lists_all_registered() -> None:
     assert set(known_datasets()) == {
         "gsm8k", "math", "humaneval",
         "matharena", "livecodebench",
+        "self_judge",
     }
 
 
@@ -100,8 +101,19 @@ def test_get_verifier_returns_correct_callable() -> None:
 
 def test_all_registered_verifiers_return_float_on_empty_inputs() -> None:
     """Every registered verifier should accept ``(str, str)`` and return
-    ``float`` even on empty inputs (which uniformly map to 0.0)."""
+    ``float`` even on empty inputs (which uniformly map to 0.0).
+
+    Exception: ``self_judge`` is a sentinel for batched LLM-judge
+    verification and is intentionally not callable via ``verify()`` —
+    cell runners dispatch to ``self_judge.score_matrix()`` instead. We
+    assert it raises ``NotImplementedError`` so accidental ``verify()``
+    calls fail loudly rather than silently misbehave.
+    """
     for name in known_datasets():
+        if name == "self_judge":
+            with pytest.raises(NotImplementedError):
+                verify(name, "", "")
+            continue
         result = verify(name, "", "")
         assert isinstance(result, float), f"{name} returned {type(result).__name__}"
         assert result == 0.0, f"{name} returned {result} for empty inputs"

@@ -16,7 +16,7 @@
 #
 # -----------------------------------------------------------------------------
 # Usage:
-#   bash scripts/deployment_exp/run_h3_panel.sh [--num-gpus N]
+#   bash scripts/h5_exp/run_h3_panel.sh [--num-gpus N]
 # -----------------------------------------------------------------------------
 
 set -uo pipefail
@@ -56,7 +56,7 @@ declare -A HF_IDS=(
     [llama3.1-8b-instruct]="meta-llama/Llama-3.1-8B-Instruct"
 )
 
-rg_log "=== deployment_exp H3 panel ==="
+rg_log "=== H5 (deployment) — H3-analysis panel ==="
 rg_log "Models:    ${MODELS[*]}"
 rg_log "Datasets:  ${DATASETS[*]}"
 rg_log "Taus:      ${TAUS[*]}"
@@ -160,5 +160,5 @@ done
 
 PANEL_DUR=$(( $(date +%s) - PANEL_T0 ))
 echo
-rg_log "=== deployment_exp H3 PANEL DONE in ${PANEL_DUR}s ($(awk "BEGIN{printf \"%.2f\", ${PANEL_DUR}/3600}") hr) ==="
+rg_log "=== H5 (deployment) H3 PANEL DONE in ${PANEL_DUR}s ($(awk "BEGIN{printf \"%.2f\", ${PANEL_DUR}/3600}") hr) ==="
 ls "${OUTPUTS_ROOT}/results/h3/" 2>/dev/null | grep -E "matharena|livecodebench" | wc -l | xargs echo "  deployment H3 cells:"

@@ -80,6 +80,9 @@ def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
     LiveCodeBench: bundle public + private test cases (parsed from
         JSON-encoded strings) plus the ``starter_code`` field into a
         single JSON blob the verifier can re-parse.
+    self_judge (preference mode): the reference y^+ is the assistant
+        message text. UltraFeedback's `chosen` is a list of role-content
+        dicts; extract the assistant turn. Otherwise treat as raw string.
     Everything else: just the raw ground-truth field.
     """
     if ds_cfg.get("verifier") == "livecodebench":
@@ -93,6 +96,14 @@ def _assemble_ground_truth(row: dict[str, Any], ds_cfg: dict[str, Any]) -> str:
             "tests": tests,
             "starter_code": row.get("starter_code", ""),
         })
+    if ds_cfg.get("verifier") == "self_judge":
+        chosen = row[ds_cfg["ground_truth_field"]]
+        if isinstance(chosen, list):
+            for msg in chosen:
+                if isinstance(msg, dict) and msg.get("role") == "assistant":
+                    return msg.get("content", "")
+            return ""  # malformed row
+        return str(chosen)
     gt = row[ds_cfg["ground_truth_field"]]
     if "entry_point_field" in ds_cfg:
         gt = gt + f"\ncheck({row[ds_cfg['entry_point_field']]})\n"
@@ -112,7 +123,7 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument(
         "--dataset", required=True,
-        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench"],
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64, help="K_max; samples per prompt")
@@ -122,6 +133,10 @@ def main() -> None:
     )
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--gpu-mem", type=float, default=0.85)
+    parser.add_argument(
+        "--api-concurrency", type=int, default=10,
+        help="Max in-flight requests for backend:api models (proxy rate-limit ceiling).",
+    )
     args = parser.parse_args()
 
     paths = load_paths()
@@ -227,16 +242,39 @@ def main() -> None:
     log.info("Cache key fingerprint: %s", key.fingerprint())
 
     # --- format prompts --------------------------------------------------
-    log.info("Loading tokenizer for %s", model_cfg["hf_id"])
-    tokenizer = AutoTokenizer.from_pretrained(model_cfg["hf_id"])
+    # backend:api models (H5 hosted subjects) have no local tokenizer —
+    # the hosted endpoint applies its own chat template, so we pass the
+    # raw user text and hand the system prompt to ApiRunner.
+    is_api = model_cfg.get("backend") == "api"
+    if is_api and ds_cfg.get("verifier") == "self_judge":
+        raise SystemExit(
+            "backend:api models support deterministic-verifier datasets only "
+            "(H1/H3 of H5); self_judge preference verification is not wired "
+            "for API backends."
+        )
     chat_tmpl = ds_cfg["templates"]["chat"]
     prompt_field = ds_cfg["prompt_field"]
 
+    if is_api:
+        tokenizer = None
+        log.info("API backend (%s); skipping local tokenizer", model_cfg["hf_id"])
+    else:
+        log.info("Loading tokenizer for %s", model_cfg["hf_id"])
+        tokenizer = AutoTokenizer.from_pretrained(model_cfg["hf_id"])
+
     prompts: list[str] = []
+    raw_user_prompts: list[str] = []   # raw user question, used by self_judge verifier
     ground_truths: list[str] = []
     for row in raw_inputs:
-        user_text = chat_tmpl["user_template"].format(**{prompt_field: row[prompt_field]})
-        prompts.append(_format_chat_prompt(tokenizer, chat_tmpl["system"], user_text))
+        raw_q = row[prompt_field]
+        if isinstance(raw_q, (bytes, bytearray)):
+            raw_q = raw_q.decode("utf-8")
+        raw_user_prompts.append(str(raw_q))
+        user_text = chat_tmpl["user_template"].format(**{prompt_field: raw_q})
+        if is_api:
+            prompts.append(user_text)  # hosted model applies its own template
+        else:
+            prompts.append(_format_chat_prompt(tokenizer, chat_tmpl["system"], user_text))
         ground_truths.append(_assemble_ground_truth(row, ds_cfg))
 
     # --- sample ----------------------------------------------------------
@@ -247,19 +285,33 @@ def main() -> None:
     else:
         log.info("Cache miss — sampling K=%d completions per prompt", args.K)
         t0 = time.time()
-        with VllmRunner(
-            model_cfg["hf_id"],
-            gpu_memory_utilization=args.gpu_mem,
-            enforce_eager=True,
-        ) as runner:
-            cfg = SamplingConfig(
-                temperature=1.0, top_p=1.0, top_k=-1, max_tokens=args.max_tokens,
-            )
-            samples_list = runner.sample(
-                prompts, K=args.K, seed=args.seed, config=cfg,
-            )
+        cfg = SamplingConfig(
+            temperature=1.0, top_p=1.0, top_k=-1, max_tokens=args.max_tokens,
+        )
+        if is_api:
+            from src.sampling.api_runner import ApiModelSpec, ApiRunner
+            spec = ApiModelSpec.from_model_cfg(model_cfg)
+            resume_path = paths.samples_dir / f"apiresume_{key.fingerprint()}.jsonl"
+            log.info("API sampling: %d prompts x K=%d, concurrency=%d, resume=%s",
+                     len(prompts), args.K, args.api_concurrency, resume_path)
+            with ApiRunner(
+                spec, system=chat_tmpl["system"], resume_path=resume_path,
+                concurrency=args.api_concurrency,
+            ) as runner:
+                samples_list = runner.sample(
+                    prompts, K=args.K, seed=args.seed, config=cfg,
+                )
+        else:
+            with VllmRunner(
+                model_cfg["hf_id"],
+                gpu_memory_utilization=args.gpu_mem,
+                enforce_eager=True,
+            ) as runner:
+                samples_list = runner.sample(
+                    prompts, K=args.K, seed=args.seed, config=cfg,
+                )
         sample_seconds = time.time() - t0
-        log.info("Sampling done in %.1f s (%.2f GPU-hr)", sample_seconds, sample_seconds / 3600)
+        log.info("Sampling done in %.1f s", sample_seconds)
 
         records = [
             {
@@ -286,47 +338,103 @@ def main() -> None:
         )
 
     # --- verify ----------------------------------------------------------
-    # Verification is parallelised across threads for code-execution
-    # verifiers (HumanEval, LiveCodeBench) where each call spawns its own
-    # subprocess and is dominated by I/O wait. Pure-Python verifiers
-    # (gsm8k, math, matharena) also benefit from parallel CPU work on the
-    # M*K pairs at no correctness cost.
+    # Two code paths:
+    #
+    # 1. Preference mode (ds_cfg["verifier"] == "self_judge"): each
+    #    (prompt, sample) pair is judged by an LLM (the same model under
+    #    test, for H1 strict self) against the human-preferred reference
+    #    y^+. L=5 i.i.d. judge calls per pair with random A/B position;
+    #    ternary outcome in {0, 0.5, 1} by strict majority. Batched
+    #    through vLLM. See src/verification/self_judge.py.
+    #
+    # 2. Verifier-binary mode (gsm8k, math, humaneval, matharena,
+    #    livecodebench): parallelised across threads since code-execution
+    #    verifiers spawn subprocesses dominated by I/O wait; pure-Python
+    #    verifiers also benefit from parallel CPU work on the M*K pairs
+    #    at no correctness cost.
     #
     # Per AGENT.md §3.3 every verifier decision is logged. log_verifier_
-    # decision appends single short JSON lines (< PIPE_BUF), so concurrent
-    # appends from threads are atomic.
-    import os
-    from concurrent.futures import ThreadPoolExecutor
-
+    # decision appends single short JSON lines (< PIPE_BUF), so
+    # concurrent appends from threads are atomic.
     M = len(records)
-    log.info("Verifying %d (prompt, sample) pairs", M * args.K)
-    utility = np.zeros((M, args.K), dtype=float)
+    samples_per_prompt = [rec["samples"] for rec in records]
 
-    tasks: list[tuple[int, int, str, str, str]] = []
-    for i, rec in enumerate(records):
-        for k, sample in enumerate(rec["samples"]):
-            tasks.append((i, k, sample, rec["ground_truth"], rec["prompt_id"]))
-
-    def _verify_task(t: tuple[int, int, str, str, str]) -> tuple[int, int, float, str]:
-        i, k, sample, gt, prompt_id = t
-        return i, k, verify_dispatch(args.dataset, sample, gt), prompt_id
-
-    n_workers = min(32, (os.cpu_count() or 4))
-    log.info("Verifying with %d worker threads", n_workers)
-    with ThreadPoolExecutor(max_workers=n_workers) as pool:
-        for i, k, u, prompt_id in pool.map(_verify_task, tasks):
-            utility[i, k] = u
-            log_verifier_decision(
-                paths.logs_dir,
-                args.dataset,
-                {
-                    "experiment": experiment,
-                    "prompt_id": prompt_id,
-                    "k": k,
-                    "utility": u,
-                    "seed": args.seed,
-                },
+    if ds_cfg.get("verifier") == "self_judge":
+        # --- preference mode: batched LLM judge ---
+        from src.verification.self_judge import score_matrix
+        L_judge = int(ds_cfg.get("judge_L", 5))
+        log.info(
+            "Preference mode: %d * %d * L=%d = %d judge calls via vLLM",
+            M, args.K, L_judge, M * args.K * L_judge,
+        )
+        with VllmRunner(
+            model_cfg["hf_id"],
+            gpu_memory_utilization=args.gpu_mem,
+            enforce_eager=True,
+        ) as judge_runner:
+            outcome = score_matrix(
+                judge_runner=judge_runner,
+                judge_tokenizer=tokenizer,
+                raw_prompts=raw_user_prompts,
+                candidates=samples_per_prompt,
+                references=ground_truths,
+                L=L_judge,
+                seed=args.seed,
             )
+        utility = outcome.utility.astype(float)
+        log.info(
+            "Judge done: parse_failure_rate=%.4f, n_calls=%d",
+            outcome.parse_failure_rate, outcome.n_judge_calls,
+        )
+        # Audit log: one record per (prompt, sample) summarising L votes.
+        for i in range(M):
+            for k in range(args.K):
+                log_verifier_decision(
+                    paths.logs_dir,
+                    args.dataset,
+                    {
+                        "experiment": experiment,
+                        "prompt_id": records[i]["prompt_id"],
+                        "k": k,
+                        "utility": float(utility[i, k]),
+                        "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "seed": args.seed,
+                    },
+                )
+
+    else:
+        # --- verifier-binary mode (existing path) ---
+        import os
+        from concurrent.futures import ThreadPoolExecutor
+
+        log.info("Verifying %d (prompt, sample) pairs", M * args.K)
+        utility = np.zeros((M, args.K), dtype=float)
+
+        tasks: list[tuple[int, int, str, str, str]] = []
+        for i, rec in enumerate(records):
+            for k, sample in enumerate(rec["samples"]):
+                tasks.append((i, k, sample, rec["ground_truth"], rec["prompt_id"]))
+
+        def _verify_task(t: tuple[int, int, str, str, str]) -> tuple[int, int, float, str]:
+            i, k, sample, gt, prompt_id = t
+            return i, k, verify_dispatch(args.dataset, sample, gt), prompt_id
+
+        n_workers = min(32, (os.cpu_count() or 4))
+        log.info("Verifying with %d worker threads", n_workers)
+        with ThreadPoolExecutor(max_workers=n_workers) as pool:
+            for i, k, u, prompt_id in pool.map(_verify_task, tasks):
+                utility[i, k] = u
+                log_verifier_decision(
+                    paths.logs_dir,
+                    args.dataset,
+                    {
+                        "experiment": experiment,
+                        "prompt_id": prompt_id,
+                        "k": k,
+                        "utility": u,
+                        "seed": args.seed,
+                    },
+                )
 
     # --- aggregate at K_max + saturation curve + bootstrap CI ------------
     est = compute_rational_gap(utility)

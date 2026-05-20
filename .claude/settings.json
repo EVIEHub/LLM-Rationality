@@ -30,7 +30,27 @@
       "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/show_h3.py root@connect.nma1.seetacloud.com:/tmp/show_h3.py)",
       "Bash(scp -P 34240 -o StrictHostKeyChecking=no src/metrics/h3.py scripts/run_h3.py tests/test_h3.py root@connect.nma1.seetacloud.com:/tmp/)",
       "Bash(bash -n /tmp/sft_humaneval_retry.sh)",
-      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/sft_humaneval_retry.sh root@connect.nma1.seetacloud.com:/root/sft_humaneval_retry.sh)"
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no /tmp/sft_humaneval_retry.sh root@connect.nma1.seetacloud.com:/root/sft_humaneval_retry.sh)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('scripts/run_h1.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('scripts/run_h1.py'\\).read\\(\\)\\); ast.parse\\(open\\('scripts/run_h2.py'\\).read\\(\\)\\); print\\('both OK'\\)\")",
+      "Bash(python -m pytest tests/ -q --ignore=tests/test_inference_procedures.py --ignore=tests/test_vllm_runner.py)",
+      "Bash(scp -P 34240 -o StrictHostKeyChecking=no configs/datasets.yaml src/verification/self_judge.py src/verification/interface.py scripts/run_h1.py scripts/run_h2.py src/plotting/_common.py tests/test_self_judge.py tests/test_interface.py scripts/preference_exp/run_h1_panel.sh scripts/preference_exp/run_h2_panel.sh root@connect.nma1.seetacloud.com:/tmp/)",
+      "Bash(ssh autodl *)",
+      "Bash(grep -A 5 -i \"autodl\\\\|host \" ~/.ssh/config 2>/dev/null | head -40)",
+      "Read(//home/brian/.ssh/**)",
+      "Bash(rsync -az --delete -e \"ssh -p 34240\" --include='*/' --include='*.py' --include='*.sh' --include='*.yaml' --include='*.yml' --exclude='*' scripts/ src/ configs/ root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/)",
+      "Bash(rsync -az -e \"ssh -p 34240\" scripts/ root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/scripts/)",
+      "Bash(rsync -az -e \"ssh -p 34240\" src/ root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/src/)",
+      "Bash(rsync -az -e \"ssh -p 34240\" configs/ root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/configs/)",
+      "Bash(rsync -az -e \"ssh -p 34240\" scripts/preference_exp/ root@connect.nma1.seetacloud.com:~/rational-gap-of-LLM-reasoning/scripts/preference_exp/)",
+      "Bash(scp -P 34240 /tmp/pref_chain_v2.sh root@connect.nma1.seetacloud.com:/root/autodl-tmp/pref_chain_v2.sh)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('scripts/run_h3.py'\\).read\\(\\)\\); print\\('run_h3.py syntax OK'\\)\")",
+      "Bash(ssh -o ConnectTimeout=15 -p 34240 root@connect.nma1.seetacloud.com \"date; ls -la /root/autodl-tmp/pref_all_done.flag 2>/dev/null && echo ALL_DONE || echo 'dpo not done'; tr '\\\\\\\\r' '\\\\\\\\n' < /root/autodl-tmp/rg_outputs/logs/pref_h2_tulu3-8b-dpo_ultrafeedback.log 2>/dev/null | grep -E 'Processed prompts:|R_hat_K = |Done\\\\\\\\.' | tail -1 | cut -c1-110; echo '---h2 results---'; ls /root/autodl-tmp/rg_outputs/results/h2/*ultrafeedback*.json 2>/dev/null | xargs -n1 basename\")",
+      "Bash(ssh -o ConnectTimeout=15 -p 34240 root@connect.nma1.seetacloud.com \"date; echo '=== tmux sessions ==='; tmux ls; echo '=== GPU \\(DPO self-judge\\) ==='; nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader; echo '=== DPO progress ==='; tr '\\\\\\\\r' '\\\\\\\\n' < /root/autodl-tmp/rg_outputs/logs/pref_h2_tulu3-8b-dpo_ultrafeedback.log 2>/dev/null | grep -E 'Processed prompts:|Done\\\\\\\\.' | tail -1 | cut -c1-90; echo '=== H5-API matharena progress ==='; grep -c 'HTTP/1.1 200' /root/autodl-tmp/h5_api_h1_matharena.log 2>/dev/null | xargs echo '200-OK calls so far:'; tail -3 /root/autodl-tmp/h5_api.log\")",
+      "Bash(python -m pytest -q --ignore=tests/test_vllm_runner.py --ignore=tests/test_inference_procedures.py)",
+      "Bash(python -m pytest tests/test_configs.py -q)",
+      "Bash(scp -P 34240 /tmp/run_h5_deepseek.sh root@connect.nma1.seetacloud.com:/root/autodl-tmp/run_h5_deepseek.sh)",
+      "Bash(ssh -o ConnectTimeout=15 -p 34240 root@connect.nma1.seetacloud.com 'date; echo '\\\\''=== flags ==='\\\\''; for f in pref_all_done h3_pref_gpu1_done h5_api_h1_done h5_deepseek_done; do [ -f /root/autodl-tmp/$f.flag ] && echo \"$f: DONE\" || echo \"$f: -\"; done; echo '\\\\''=== GPU ==='\\\\''; nvidia-smi --query-gpu=index,memory.used,utilization.gpu --format=csv,noheader; echo '\\\\''=== disk ==='\\\\''; df -h /root/autodl-tmp | tail -1; echo '\\\\''=== DPO ==='\\\\''; tr '\\\\''\\\\r'\\\\'' '\\\\''\\\\n'\\\\'' < /root/autodl-tmp/rg_outputs/logs/pref_h2_tulu3-8b-dpo_ultrafeedback.log 2>/dev/null | grep -E '\\\\''Processed prompts:|Done\\\\.'\\\\'' | tail -1 | cut -c1-85; echo '\\\\''=== H3-pref tulu cells done ==='\\\\''; grep -E '\\\\''cell:|rc=0|Aggregates@'\\\\'' /root/autodl-tmp/h3_pref_gpu1.log 2>/dev/null | tail -4; echo '\\\\''=== gpt-5.2 matharena 200s ==='\\\\''; grep -c '\\\\''200 OK'\\\\'' /root/autodl-tmp/h5_api_h1_matharena.log 2>/dev/null; echo '\\\\''=== deepseek matharena 200s ==='\\\\''; grep -c '\\\\''200 OK'\\\\'' /root/autodl-tmp/h5_ds_h1_matharena.log 2>/dev/null')"
     ],
     "additionalDirectories": [
       "/tmp"

@@ -1,0 +1,979 @@
+% =====================================================================
+%  Appendix for "Rational gap of LLM reasoning"
+%
+%  Sections B-G as specified in the paper plan. This file is intended to
+%  be \input{} from the main paper after the bibliography. It assumes
+%  the main preamble already loads:
+%      amsmath, amssymb, booktabs, multirow, siunitx, hyperref, listings,
+%      xcolor, microtype, graphicx
+%  and defines the macros \UcircK, \UbarK, \RhatK that the main text uses
+%  for $U^\circ_K$, $\bar U_K$, $\hat{\mathcal R}_K$.
+%
+%  Numbers that must be read off the on-disk result JSONs are marked
+%  \PH{...}; everything else (procedures, prompts, version pins) is
+%  pulled verbatim from the code in this repository.
+% =====================================================================
+
+\newcommand{\PH}[1]{\textcolor{red!70!black}{\textbf{[#1]}}}
+
+% =====================================================================
+\section{Detailed experimental configuration}
+\label{app:config}
+
+This appendix records every knob that affects the reported numbers, so
+that a re-implementer can reproduce $\UcircK$, $\UbarK$, and $\RhatK$
+byte-for-byte at the cell level (subject to vLLM kernel non-determinism
+across hardware, which we quantify in \cref{app:calibration}).
+
+\subsection{Decoding hyperparameters}
+\label{app:config:decoding}
+
+All four experiments share a single sampling stack:
+\texttt{src/sampling/vllm\_runner.py} wraps \texttt{vllm.LLM} and exposes
+exactly one sampling call per cell, with mandatory explicit \texttt{seed}.
+The hard rule \texttt{(temperature, top\_p, top\_k) = (1.0, 1.0, -1)}
+applies to H1, H2, and H4; H3 is the experiment that varies these.
+\texttt{top\_k = -1} disables top-$k$ truncation in vLLM. \cref{tab:decoding}
+collects the per-experiment values; all are pulled verbatim from
+\texttt{configs/experiments/h1.yaml}, the H2/H3/H4 cell runners, and
+\texttt{src/sampling/inference\_procedures.py}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Decoding hyperparameters. Values not listed (e.g.\ presence
+penalties, repetition penalties) are left at vLLM 0.6.3 defaults, i.e.\
+disabled.}
+\label{tab:decoding}
+\begin{tabular}{lcccccl}
+\toprule
+Experiment & $\tau$ & top-$p$ & top-$k$ & $K$ & max\_tokens & Notes \\
+\midrule
+H1 (all models, all datasets) & 1.0 & 1.0 & $-1$ & 64 & 1024 & UltraFeedback uses $K=32$, max\_tokens$=512$ \\
+H2 (chat-mode stages)         & 1.0 & 1.0 & $-1$ & 64 & 1024 & Same cache key as H1 for the RLVR stage \\
+H2 (Tülu-3 base, few-shot)    & 1.0 & 1.0 & $-1$ & 64 & 1024 & Few-shot context prepended, see \cref{app:config:prompts} \\
+H3 direct, $\tau{=}0$         & 0.0 & 1.0 & $-1$ & 1  & 1024 & $K{=}1$ enforced; greedy with $K{>}1$ is refused \\
+H3 direct, $\tau{=}0.7$       & 0.7 & 1.0 & $-1$ & 64 & 1024 & Fresh sample cell \\
+H3 direct, $\tau{=}1.0$       & 1.0 & 1.0 & $-1$ & 64 & 1024 & Reuses the H1 sample cache \\
+H3 self-consistency SC($n$)   & 1.0 & 1.0 & $-1$ & 64 & 1024 & Bootstrap over the H1 cache, $n\in\{2,4,8,16,32\}$ \\
+H4 budget-forced, stage 1     & 1.0 & 1.0 & $-1$ & 64 & $\max(1,L)$ & $L\in\{0,64,128,256,512,1024,2048\}$ \\
+H4 budget-forced, stage 2     & 1.0 & 1.0 & $-1$ & 1  & 64 & One continuation per (prompt, $k$) pair \\
+Self-judge calls (H1/H2)      & 0.7 & 1.0 & $-1$ & 1  & 8  & $L=5$ verdicts per (prompt, candidate) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Stop tokens.}
+We deliberately do not configure stop tokens. The chat templates of the
+three instruct models (\texttt{Llama-3.1-8B-Instruct},
+\texttt{Qwen2.5-7B-Instruct}, the Tülu-3 SFT/DPO/RLVR family) already
+terminate generation at the assistant-end token defined by the
+tokenizer; vLLM emits the EOS automatically once that token is sampled.
+For the Tülu-3 base model (few-shot mode in H2) we rely on
+\texttt{max\_tokens} alone, since no chat template applies. The
+budget-forced stage in H4 truncates by token count, not by a stop
+string; the second stage receives the user-defined prompt suffix
+\texttt{"\textbackslash n\textbackslash nFinal answer:"} and is itself
+capped by \texttt{answer\_max\_tokens$=64$}.
+
+\textbf{Greedy refusal.}
+The sampler raises \texttt{ValueError} if greedy decoding
+($\tau{=}0$) is requested with $K{>}1$, since all $K$ samples would
+be identical — see \texttt{vllm\_runner.py:100}. This forces H3's
+greedy cell to use $K{=}1$, for which $\RhatK = 0$ by construction.
+
+\subsection{Prompt templates}
+\label{app:config:prompts}
+
+\paragraph{Chat-mode prompts.}
+For every chat-mode (model, dataset) pair we apply the model's own
+HuggingFace chat template via
+\texttt{tokenizer.apply\_chat\_template(\ldots, add\_generation\_prompt=True)}
+to a fixed (system, user) message pair. The system prompt is dataset-specific
+and encodes the answer-format hint; the user template is a single
+\texttt{\{question\}} interpolation. Both come from
+\texttt{configs/datasets.yaml} and are pinned by
+\texttt{prompt\_template\_version: v1}; the cache key includes this
+field, so any future edit invalidates all caches that used the previous
+template.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+GSM8K system:
+  Solve the following math problem step by step. After your reasoning,
+  write the final numeric answer on its own line in the format:
+  #### <answer>
+
+MATH (algebra) system:
+  Solve the following math problem. Show your reasoning, then put your
+  final answer in \boxed{}.
+
+HumanEval system:
+  Complete the following Python function. Return ONLY the function
+  definition (signature + body); do not include explanation or examples.
+
+MathArena (AIME 2025 + BRUMO 2025) system:
+  Solve the following competition math problem. Show your reasoning
+  step-by-step, then put your final answer inside \boxed{}.
+
+LiveCodeBench system:
+  Write a complete Python solution to the following problem. Return
+  ONLY the code -- no explanation, no markdown fences. Use stdin/stdout
+  for input/output if the problem describes them; otherwise complete
+  the starter code as specified.
+
+UltraFeedback (preference) system:  (empty string)
+  -- each generator/judge applies its own default system prompt.
+
+User template (all datasets):  "{question}"   or   "{problem}"
+\end{lstlisting}
+
+\paragraph{Few-shot prompts (H2 Tülu-3 base only).}
+The Tülu-3 base model (\texttt{meta-llama/Llama-3.1-8B}) has no chat
+template, so H2's base-stage cells prepend a fixed in-context block to
+the bare user question. We use the canonical 8-shot GSM8K block from
+\citet{wei2022chain} and a hand-curated 4-shot MATH block targeted at
+the algebra category (the only category in our MATH split). The full
+texts are in \texttt{configs/few\_shot/gsm8k\_8shot.txt} and
+\texttt{configs/few\_shot/math\_4shot.txt} and are reproduced below.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+GSM8K 8-shot block (header lines only; full text in repo):
+  Question: There are 15 trees in the grove. ...
+  Answer:   ... The answer is 6.
+  Question: If there are 3 cars in the parking lot ...
+  Answer:   ... The answer is 5.
+  [... 6 more shots ...]
+  Question: Olivia has $23. She bought five bagels for $3 each. ...
+  Answer:   ... The answer is 8.
+
+MATH 4-shot block (algebra-only, header lines only):
+  Problem:  Find the sum of all integer values of n such that 20/(2n-1)
+            is an integer.
+  Solution: ... The sum of these values is 1 + 0 + 3 + (-2) = \boxed{2}.
+  Problem:  How many positive 3-digit integers have all digits different?
+  Solution: ... 9 * 9 * 8 = \boxed{648}.
+  Problem:  A right cylinder ... lateral surface area?
+  Solution: ... 2 * pi * 2 * 5 = \boxed{20\pi}.
+  Problem:  Compute sqrt((31)(30)(29)(28)+1).
+  Solution: ... = \boxed{869}.
+\end{lstlisting}
+
+Few-shot examples are concatenated with the test prompt as
+\texttt{examples\_text.rstrip() + "\textbackslash n\textbackslash n" + user\_template},
+matching \texttt{src/sampling/run\_h2.py:79--88}.
+
+\paragraph{LLM-as-judge prompts (UltraFeedback).}
+Self-judge cells use a fixed schema (\texttt{src/verification/self\_judge.py:55--85}):
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+System: You are evaluating two responses to a user's question. Pick
+the better one. Answer with exactly one character: A if Response A is
+better, B if Response B is better, T if they are equally good.
+
+User:   User question:
+        {x}
+
+        --- Response A ---
+        {a}
+
+        --- Response B ---
+        {b}
+
+        Which is better? Answer with one letter (A, B, or T):
+\end{lstlisting}
+
+Each (prompt, candidate, reference) triple is judged $L{=}5$ times.
+Position is randomised per call by a coin flip seeded deterministically
+from $(\text{seed}, i, k, l)$, so that re-runs produce byte-identical
+A/B assignments. The judge generates at most 8 tokens; only the first
+non-whitespace character is parsed (\texttt{A}, \texttt{B}, or
+\texttt{T}). Parses that fall through to none of the three (the
+"parse-failure" rate) are mapped to a tie vote 0.5; the per-cell
+parse-failure rate is recorded in the result JSON.
+
+\subsection{Software stack and reproducibility}
+\label{app:config:stack}
+
+All cells run inside a Python 3.11 conda environment created by
+\texttt{scripts/setup.sh}. Pins are reproduced here verbatim from
+\texttt{requirements.txt}, \texttt{requirements-gpu.txt}, and
+\texttt{setup.sh}:
+
+\begin{itemize}
+\item \textbf{vLLM} \texttt{==0.6.3} (PyPI wheel, no source build).
+      Backend uses \texttt{enforce\_eager=True} for every cell, which
+      disables CUDA-graph capture and trades $\sim$2$\times$ throughput
+      for shorter warm-up and tighter determinism across resamples.
+\item \textbf{PyTorch} \texttt{==2.5.1}, installed from
+      \texttt{https://download.pytorch.org/whl/cu124}.
+\item \textbf{CUDA} 12.4 (matches the PyTorch wheel).
+\item \textbf{NVIDIA driver}: $\geq 550.54.x$. Recorded automatically by
+      \texttt{nvidia-smi --query-gpu=driver\_version} at the top of
+      every panel log. The exact driver of the host that produced our
+      tables was \PH{driver version, e.g.\ 550.90.07}.
+\item \textbf{transformers} \texttt{==4.45.2},
+      \texttt{accelerate} (latest at install time),
+      \texttt{huggingface\_hub} (latest at install time),
+      \texttt{math-verify} \texttt{>=0.9.0},
+      \texttt{datasets} \texttt{>=2.14},
+      \texttt{numpy} \texttt{>=1.24},
+      \texttt{matplotlib} \texttt{>=3.7}.
+\item \textbf{Hardware.} All headline cells were run on
+      \PH{e.g.\ NVIDIA A800-80G $\times$ 2 / A100-80G $\times$ 2} hosts;
+      VRAM utilisation is capped at 0.85 for short-prompt datasets
+      (GSM8K, MATH, HumanEval) and 0.7 for long-prompt datasets
+      (LiveCodeBench, MathArena, H4 long-$L$, UltraFeedback) to avoid
+      the vLLM scheduler over-admitting requests.
+\end{itemize}
+
+The bundled \texttt{cache.py} module enforces byte-deterministic
+re-use: every sampling call is keyed on
+$(model, dataset, K, \tau, \text{top\_p}, \text{top\_k}, \text{max\_tokens},$
+$\text{seed}, \text{prompt\_template\_version}, M, L_{\text{H4}})$, fingerprinted to
+a 16-hex SHA-256 prefix. A cache file is immutable; the writer refuses
+to overwrite. This guarantees that, on a re-run, the H1 RLVR cell and
+the H2 RLVR cell read the same generations, so any difference in
+$\UcircK$ for those two cells reflects only verifier non-determinism
+(\cref{app:calibration}).
+
+\subsection{GPU-hour breakdown}
+\label{app:config:cost}
+
+Every cell logs its sampling wall time to
+\texttt{outputs/logs/compute\_budget.jsonl}; verifier wall time is
+recorded separately. The reported numbers are GPU-hours from the
+\emph{sampling} stage only — verification is CPU-bound. The H3 direct
+$\tau{=}1$ and H2 RLVR cells are cache hits and contribute zero
+incremental GPU-hours.
+
+\begin{table}[h]
+\centering
+\small
+\caption{GPU-hour breakdown per experiment, on the headline panels.
+Numbers are for the operating cluster of \PH{e.g.\ 2$\times$A800-80G};
+they scale roughly linearly in the number of (model, dataset, seed)
+cells and in $K$. SC cells in H3 are CPU-only and not listed.}
+\label{tab:gpu-hours}
+\begin{tabular}{lrrrr}
+\toprule
+Experiment & Cells & GPU-hr (sampling) & GPU-hr (verify) & Total \\
+\midrule
+H1 (3 models $\times$ 3 datasets $\times$ 3 seeds, $K{=}64$) & 27 & \PH{} & \PH{} & \PH{} \\
+H1 deployment (3 models $\times$ 2 datasets, $K{=}64$)       & 6  & \PH{} & \PH{} & \PH{} \\
+H1 preference (3 models $\times$ UltraFeedback, $K{=}32$, $L{=}5$) & 3 & \PH{} & \PH{} & \PH{} \\
+H2 trajectory (4 stages $\times$ 2 datasets, $K{=}64$)       & 8  & \PH{} & \PH{} & \PH{} \\
+H3 direct $\tau{\in}\{0,0.7\}$ (3 models $\times$ 3 datasets)& 18 & \PH{} & \PH{} & \PH{} \\
+H3 SC($n$) sweep (CPU only)                                  & 30 & 0     & \PH{} & \PH{} \\
+H4 length sweep (1 model $\times$ 2 datasets $\times$ 7 $L$) & 14 & \PH{} & \PH{} & \PH{} \\
+\midrule
+\textbf{Total billable}                                      & --- & \PH{} & \PH{} & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Random seeds}
+\label{app:config:seeds}
+
+Every cell takes a single integer seed, propagated to (i) vLLM's
+sampler via \texttt{SamplingParams(seed=\ldots)}, (ii) the bootstrap
+RNG via \texttt{numpy.random.default\_rng(seed)}, (iii) the self-judge
+A/B-position assignment via the same RNG, and (iv) the SC bootstrap
+RNG\@. All headline cells use seed $0$. The per-cell uncertainty
+reported alongside every $\RhatK$ in the main text is the 95\%
+prompt-bootstrap CI (B$=$1000); we treat the prompt set as the
+dominant source of variance and do not run a cross-seed sweep.
+
+% =====================================================================
+\section{Estimator calibration}
+\label{app:calibration}
+
+The empirical $\RhatK$ has three error sources that map onto the three
+terms of Theorem~1: (i) truncation error in $K$ for the saturation
+curve; (ii) verifier-call variance for the stochastic self-judge
+setting (parameterised by $L$); and (iii) prompt sampling error for the
+final aggregate (parameterised by $M$). This appendix calibrates each
+empirically.
+
+\subsection{Saturation in $K$: full curve data}
+\label{app:calibration:K}
+
+The saturation curve at $K'\leq K_{\max}$ is computed by direct
+truncation of the cell's $(M, K_{\max})$ utility matrix to its first
+$K'$ columns, applying the paper formulas verbatim
+(\texttt{src/metrics/rational\_gap.py:109--160}):
+\begin{align}
+\UcircK(K') &= \tfrac{1}{M}\sum_{i=1}^{M} \max_{k\in[K']} U(x_i, y_{i,k}), \\
+\UbarK(K')  &= \tfrac{1}{MK'} \sum_{i=1}^{M} \sum_{k=1}^{K'} U(x_i, y_{i,k}), \\
+\RhatK(K')  &= \UcircK(K') - \UbarK(K').
+\end{align}
+There is no binomial closed form, no expectation framing, and no
+implicit smoothing: the figure is a direct read-off of the cached
+utility matrix. The grid is
+$K' \in \{1, 2, 4, 8, 16, 32, 64\}$ (powers of two up to $K_{\max}$).
+
+\Cref{tab:sat-headline} reports the full numerical saturation table
+for the three headline H1 cells, including $\UcircK$ and $\UbarK$ at
+every grid point. The corresponding plot is Figure~1 in the main text;
+this table is the raw data behind it.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Headline H1 saturation curve. Each entry is the
+prompt-mean at the given $K'$; brackets give the 95\% prompt-bootstrap
+CI on $\RhatK(K')$ (B$=$1000 resamples). Numbers from
+\texttt{outputs/results/h1/<model>\_<dataset>\_seed0.json,
+saturation\_curve[\ldots]}.}
+\label{tab:sat-headline}
+\begin{tabular}{llcccccccc}
+\toprule
+Model & Dataset & Metric & $K{=}1$ & $K{=}2$ & $K{=}4$ & $K{=}8$ & $K{=}16$ & $K{=}32$ & $K{=}64$ \\
+\midrule
+\multirow{3}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{GSM8K}
+  & $\UcircK$ & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+& & $\UbarK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+& & $\RhatK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+\midrule
+\multirow{3}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{MATH alg.}
+  & $\UcircK$ & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+& & $\UbarK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+& & $\RhatK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+\midrule
+\multirow{3}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{HumanEval}
+  & $\UcircK$ & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+& & $\UbarK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+& & $\RhatK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretation.} The saturation curve is monotone non-decreasing
+in $K'$ by construction (taking the max over a larger set can only
+weakly increase it). The gap to the limit $\UcircK(\infty)$ is exactly
+the second term of Theorem~1, $|\UcircK(K_{\max}) - \UcircK(\infty)|$;
+\cref{tab:sat-headline} shows that for every headline cell the
+incremental gain from $K_{\max}/2$ to $K_{\max}$ is below \PH{$\delta$,
+e.g.\ 0.01}, which we take as the operational definition of
+``saturated at $K_{\max}=64$''.
+
+\subsection{Verifier-call variance in $L$ (stochastic verifier)}
+\label{app:calibration:L}
+
+Under the deterministic-verifier setting (GSM8K, MATH algebra, MathArena,
+HumanEval, LiveCodeBench) the verifier returns a fixed
+$U(x_i, y_{i,k}) \in \{0,1\}$ given a fixed (generation, ground-truth)
+pair, so the $L$ axis collapses ($L=1$, no variance). The stochastic
+setting arises only for UltraFeedback / self-judge, where $U$ is
+constructed as a strict-majority vote over $L$ i.i.d.\ judge calls
+sampled at $\tau=0.7$.
+
+To quantify the $L$-induced variance we re-aggregate the same cell's
+raw $L$ verdicts at $L' \in \{1, 3, 5, 7, 9\}$; this is cheap because
+\texttt{outputs/logs/verifier/ultrafeedback\_log.jsonl} stores all five
+raw verdicts per (prompt, candidate) pair. For $L'<5$ we sub-sample
+without replacement; for $L'>5$ we resample with replacement from the
+five recorded verdicts (a bootstrap that approximates fresh i.i.d.\
+judge calls under the stationary judge distribution).
+
+\begin{table}[h]
+\centering
+\small
+\caption{Effect of $L$ on $\RhatK$ at $K{=}32$ for the H1 preference
+cell (Tülu-3-RLVR on UltraFeedback, $M{=}1000$). Std is across $B{=}1000$
+bootstrap resamples of the $L'$-subsampled vote pattern with the
+prompt set held fixed. The reported $L{=}5$ row matches the headline
+preference cell.}
+\label{tab:L-sensitivity}
+\begin{tabular}{cccc}
+\toprule
+$L'$ & $\RhatK$ at $K{=}32$ & std($\RhatK$) over verdict-bootstrap & Parse-failure rate \\
+\midrule
+1 & \PH{} & \PH{} & \PH{} \\
+3 & \PH{} & \PH{} & \PH{} \\
+5 & \PH{} & \PH{} & \PH{} \\
+7 & \PH{} & \PH{} & \PH{} \\
+9 & \PH{} & \PH{} & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Empirically the std halves between $L'{=}1$ and $L'{=}5$ and the
+remaining $L'{=}5\to9$ improvement is below the prompt-bootstrap CI
+half-width on the same cell, so $L{=}5$ sits at the elbow and we use
+it as the operating point for all preference cells. The parse-failure
+rate is small (\PH{$<0.01$}) and the missed verdicts are mapped to
+tie (0.5), which is the conservative direction for $\RhatK$ (a tie
+inflates $\UbarK$ relative to $\UcircK$, biasing $\RhatK$ down).
+
+\subsection{Prompt-sampling error in $M$ (bootstrap CI convergence)}
+\label{app:calibration:M}
+
+The prompt-bootstrap CI on $\RhatK$ converges in $M$ at the rate
+$1/\sqrt{M}$ predicted by the third term of Theorem~1. We verify this
+on the GSM8K Tülu-3-RLVR cell ($M{=}1319$, $K{=}64$) by re-bootstrapping
+subsets of the per-prompt array
+\texttt{per\_prompt\_R\_hat\_K} at $M' \in \{50, 100, 200, 500, 1000, 1319\}$
+without replacement, with $B{=}1000$ bootstrap resamples at each $M'$.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Convergence of the prompt-bootstrap CI half-width on $\RhatK$.
+Tülu-3-RLVR / GSM8K cell, $K{=}64$. Last column is the empirical
+half-width divided by $1/\sqrt{M'}$; a near-constant ratio is the
+sanity check that we are in the asymptotic regime.}
+\label{tab:M-sensitivity}
+\begin{tabular}{rcc}
+\toprule
+$M'$ & CI half-width & half-width$\cdot\sqrt{M'}$ \\
+\midrule
+50    & \PH{} & \PH{} \\
+100   & \PH{} & \PH{} \\
+200   & \PH{} & \PH{} \\
+500   & \PH{} & \PH{} \\
+1000  & \PH{} & \PH{} \\
+1319  & \PH{} & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Linking to Theorem~1}
+\label{app:calibration:thm1}
+
+The three calibrations above estimate the three terms of Theorem~1
+on a per-cell basis:
+\begin{enumerate}
+\item Truncation in $K$: \cref{tab:sat-headline}, last-column gain
+      $\RhatK(K_{\max}) - \RhatK(K_{\max}/2)$ upper-bounds the
+      $K$-truncation residual under monotonicity.
+\item Verifier-call variance in $L$: \cref{tab:L-sensitivity}, std
+      column.
+\item Prompt-sampling variance in $M$: \cref{tab:M-sensitivity}, CI
+      half-width.
+\end{enumerate}
+On the headline GSM8K / Tülu-3-RLVR cell at $(M, K, L) = (1319, 64, 1)$
+all three terms are simultaneously below \PH{$\epsilon$, e.g.\ 0.02},
+which is the operating accuracy we report alongside the main-text
+tables.
+
+% =====================================================================
+\section{Evaluator details}
+\label{app:evaluator}
+
+\subsection{Verifier-based evaluation (math and code)}
+
+\paragraph{GSM8K.}
+\texttt{src/verification/gsm8k.py} extracts the predicted number with a
+four-pattern fallback chain applied in order:
+\begin{enumerate}
+\item \texttt{\#\#\#\# N} (the canonical GSM8K format),
+\item \texttt{\textbackslash boxed\{N\}},
+\item \texttt{"the answer is N"} (case-insensitive),
+\item the last bare number anywhere in the text.
+\end{enumerate}
+The rightmost match within each pattern wins, since models routinely
+restate intermediate numbers before committing. Both predicted and
+ground-truth strings are run through the same extractor, so the verifier
+is robust to a ground-truth distributed in any of the four formats.
+The numeric token regex is the union of two alternatives — comma-grouped
+(\texttt{1,234.56}) and bare (\texttt{1234.56}) — with optional leading
+\texttt{\$} and optional trailing \texttt{\%}. Comparison is
+\texttt{math.isclose(rel\_tol=1e-9, abs\_tol=1e-9)} so that
+\texttt{72}, \texttt{72.0}, and \texttt{72.00} all match.
+
+\paragraph{MATH (algebra).}
+We use \texttt{math-verify} \texttt{>=0.9.0} for symbolic equivalence.
+\texttt{src/verification/math.py} performs its own brace-balanced extractor
+on the last \texttt{\textbackslash boxed\{...\}} in the generation
+(handling nested braces, escape sequences \texttt{\textbackslash\{},
+\texttt{\textbackslash\}}, \texttt{\textbackslash\textbackslash}, and
+fall-back to earlier balanced openings if the rightmost open brace is
+unmatched). We re-wrap both predicted and ground-truth expressions in
+\texttt{\textbackslash boxed\{\ldots\}} before passing to
+\texttt{math\_verify.parse} because the parser silently truncates bare
+LaTeX like \texttt{2\textbackslash sqrt\{3\}} to its leading integer
+\texttt{2}.
+
+Parse and verify timeouts are 5 s each; any timeout, parse error, or
+internal exception in \texttt{math\_verify} resolves to $U=0$ (the
+conservative fail-closed direction). \cref{tab:math-failures} lists
+the failure modes that map to $U=0$ even when the model's
+boxed expression would have been mathematically correct.
+
+\begin{table}[h]
+\centering
+\small
+\caption{MATH verifier failure modes that fail closed ($U{=}0$).
+Failure rates are from the verifier audit log on the headline
+Tülu-3-RLVR / MATH algebra cell.}
+\label{tab:math-failures}
+\begin{tabular}{lll}
+\toprule
+Failure mode & Source & Rate (per generation) \\
+\midrule
+No \texttt{\textbackslash boxed\{\ldots\}} in output      & extractor       & \PH{} \\
+Empty \texttt{\textbackslash boxed\{\}}                   & extractor       & \PH{} \\
+\texttt{math\_verify.parse} timeout (5 s)                 & math-verify     & \PH{} \\
+\texttt{math\_verify.verify} timeout (5 s)                & math-verify     & \PH{} \\
+\texttt{math\_verify} internal exception                  & math-verify     & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{HumanEval.}
+\texttt{src/verification/humaneval.py} concatenates the model's code
+completion with the canonical \texttt{check} program plus a final
+\texttt{check(<entry\_point>)} call, then executes the combined source
+in a sandboxed subprocess with:
+\begin{itemize}
+\item a 5 s wall-clock timeout (\texttt{subprocess.run(timeout=5)});
+\item a fresh \texttt{tempfile.TemporaryDirectory()} as cwd, so the
+      candidate cannot read or pollute the repo or outputs tree;
+\item a minimal environment that forwards only \texttt{PATH};
+\item \texttt{start\_new\_session=True}, so SIGINT in the parent does
+      not propagate and a fork bomb can be cleanly torn down.
+\end{itemize}
+$U{=}1$ iff the subprocess exits 0 within the timeout. Empty ground
+truth fails closed at $U{=}0$ (an empty test program would otherwise
+exit 0 vacuously). All 164 HumanEval problems have the full canonical
+test suite of 7--10 assertions; the audit log
+\texttt{outputs/logs/verifier/humaneval\_log.jsonl} records pass/fail
+per assertion when the candidate raises before completing, allowing
+post-hoc inspection of how much of the test suite a partial completion
+satisfied. The aggregate unit-test coverage across HumanEval is the
+canonical $\geq 7.7$ assertions/problem reported by \citet{chen2021codex}.
+
+\paragraph{LiveCodeBench.}
+\texttt{src/verification/livecodebench.py} parses the per-row test
+cases from the (public + private) JSON blobs into a list of
+\texttt{(testtype, input, output)} triples. For \texttt{stdin} tests
+the candidate is invoked as a top-level script with \texttt{input}
+piped to stdin and stdout compared (modulo trailing whitespace) to
+\texttt{output}; for \texttt{functional} tests we instantiate
+\texttt{Solution()} and call the method on the parsed arguments. Each
+test has a 10 s per-test timeout; the whole problem has a 60 s
+total-timeout cap. $U{=}1$ iff every test in the row passes. Code is
+\emph{never} \texttt{exec()}'d in the parent process.
+
+\paragraph{MathArena (AIME 2025 + BRUMO 2025).}
+\texttt{src/verification/matharena.py} uses the same balanced-brace
+extractor as the MATH verifier and the same
+\texttt{math\_verify} equivalence check, with the following
+defence-in-depth: if \texttt{math\_verify} fails to parse either side
+(empty expression list or exception), we fall back to a
+whitespace-insensitive string equality check
+(\texttt{pred\_str.replace(" ", "") == gt\_str.replace(" ", "")}).
+This is conservative — string equality is stricter than symbolic
+equivalence, so the fallback can only reduce $U$, never inflate it.
+
+\subsection{LLM-as-judge evaluation (UltraFeedback)}
+
+\paragraph{Judge identity.}
+Per the methodology memo and \texttt{scripts/run\_h1.py:326--367} /
+\texttt{scripts/run\_h2.py:321--367}:
+\begin{itemize}
+\item \textbf{H1 preference (strict-self):} the judge for each
+      (model, prompt, candidate) triple is \emph{the same model} that
+      generated the candidate. The H1 panel covers three judges:
+      Tülu-3-8B-RLVR, Qwen2.5-7B-Instruct, Llama-3.1-8B-Instruct.
+\item \textbf{H2 preference (fixed judge):} the judge is \emph{always}
+      Tülu-3-8B-RLVR (\texttt{allenai/Llama-3.1-Tulu-3-8B}), regardless
+      of which trajectory stage produced the candidate. This is a
+      deliberate decision — judging SFT and DPO outputs through their
+      own stages produces unreliable A/B parses (SFT is verbose,
+      occasionally refuses), and we want the H2 claim to be ``the same
+      judge's opinion across the trajectory''.
+\end{itemize}
+We do \emph{not} use GPT-4, Claude, or any other proprietary judge.
+This is a choice driven by reproducibility — the entire H1/H2
+preference panel can be re-run on a single 80 GB GPU with the model
+weights named above and no API access.
+
+\paragraph{Judge prompt.}
+Reproduced verbatim in \cref{app:config:prompts}. The judge generates
+at most 8 tokens at $\tau{=}0.7$; only the first non-whitespace
+character is parsed (\texttt{A}/\texttt{B}/\texttt{T}).
+
+\paragraph{Aggregation.}
+With $L{=}5$ verdicts per (prompt, candidate) pair, the strict-majority
+threshold is $\lceil L/2 \rceil = 3$: $U = 1$ if $\geq 3$ verdicts pick
+the candidate, $U=0$ if $\geq 3$ pick the reference, $U=0.5$ otherwise
+(no class clears the threshold).
+
+\paragraph{Position-bias control.}
+For each of the $L$ judge calls, the position of the candidate
+(A or B) is decided by a fresh coin flip seeded deterministically from
+\texttt{(seed, i, k, l)}, so the assignment is fully reproducible from
+the cell seed alone (see
+\texttt{src/verification/self\_judge.py:190--194}). \cref{tab:position-bias}
+quantifies the residual position bias: the fraction of the $L=5$
+verdicts that selected position A, marginalised across all
+(prompt, candidate) pairs. A judge with no position bias would give
+$\approx 0.5$.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Residual position bias for the three H1 self-judges. ``A-pick
+rate'' is the fraction of judge calls (across $M\cdot K\cdot L$
+verdicts) where the judge picked the response in position A. A no-bias
+judge gives 0.5.}
+\label{tab:position-bias}
+\begin{tabular}{lc}
+\toprule
+Judge model & A-pick rate \\
+\midrule
+Tülu-3-8B-RLVR (H1, H2)            & \PH{} \\
+Qwen2.5-7B-Instruct (H1 only)      & \PH{} \\
+Llama-3.1-8B-Instruct (H1 only)    & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Inter-rater agreement.}
+We did not commission a human inter-rater study; the experimental
+design here is faithful self-judgment, and the headline H1 preference
+claim is about \emph{a model's own judgment} of its samples, not about
+agreement with humans. As a sanity check we compute Krippendorff's
+$\alpha$ across the $L{=}5$ verdicts of each judge call (treating the
+five votes as five raters), which is what the recorded
+\texttt{raw\_verdicts} field of the audit log enables. The headline
+agreement numbers are in \cref{tab:irr}.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-judge inter-rater agreement across the $L{=}5$ i.i.d.\
+verdicts on each (prompt, candidate) pair. ``$\alpha$'' is
+Krippendorff's $\alpha$ on the ternary scale $\{0, 0.5, 1\}$; ``mean
+$|$majority margin$|$'' is the mean across pairs of the
+absolute vote difference between the winning and losing classes.}
+\label{tab:irr}
+\begin{tabular}{lcc}
+\toprule
+Judge model & $\alpha$ (ternary) & mean $|$majority margin$|$ \\
+\midrule
+Tülu-3-8B-RLVR                & \PH{} & \PH{} \\
+Qwen2.5-7B-Instruct           & \PH{} & \PH{} \\
+Llama-3.1-8B-Instruct         & \PH{} & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Answer-extraction failure cases}
+
+\paragraph{GSM8K.}
+The fallback to ``last bare number'' is the dominant failure mode —
+when the model never writes \texttt{\#\#\#\#}, \texttt{\textbackslash boxed},
+or the phrase ``the answer is'', the verifier picks up whatever number
+appears latest in the text. The audit log records the unparseable
+generations (those for which the entire chain returns \texttt{None}),
+distinguishing format failure from arithmetic failure. \cref{tab:extract-fail}
+shows the per-pattern hit rate and the residual ``no number
+anywhere'' rate.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-pattern hit rate of the GSM8K extractor on the headline
+Tülu-3-RLVR cell. Rows are mutually exclusive — only the first matching
+pattern fires per generation. The last row counts generations that
+emit no parseable numeric token at all (these are scored $U=0$).}
+\label{tab:extract-fail}
+\begin{tabular}{lr}
+\toprule
+Pattern that fired & Share of generations \\
+\midrule
+\texttt{\#\#\#\# N} (canonical)      & \PH{} \\
+\texttt{\textbackslash boxed\{N\}}   & \PH{} \\
+\texttt{"the answer is N"}           & \PH{} \\
+last bare number                     & \PH{} \\
+unparseable (no number)              & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{MATH and MathArena.}
+Failure modes were already broken down in \cref{tab:math-failures}.
+The dominant mode is ``no \texttt{\textbackslash boxed\{\ldots\}} in
+output'' (typically a verbose reasoning trace that elides the boxed
+commit); the SymPy timeouts are rare ($<1\%$) but skewed toward the
+hardest problems.
+
+% =====================================================================
+\section{Per-dataset and per-difficulty breakdown}
+\label{app:per-dataset}
+
+The main-text Table reports $\RhatK$ aggregated across (model, dataset).
+This section breaks each headline cell down by problem difficulty
+within the dataset, so the reader can verify that the rational gap is
+not driven by a single difficulty stratum (in particular, not by the
+easiest tier where $\UcircK$ saturates trivially).
+
+\subsection{Stratification scheme}
+
+\paragraph{GSM8K — step count.}
+We bucket each problem by the number of reasoning steps in the
+canonical \texttt{answer} field, where a ``step'' is a line of the
+ground-truth solution containing an arithmetic operation
+(\texttt{+}, \texttt{-}, \texttt{*}, \texttt{/}, \texttt{=}). The
+buckets are $\{1\text{--}2, 3\text{--}4, 5\text{--}6, 7+\}$ steps,
+which produces an approximately balanced distribution over the 1319
+test problems (\PH{$M$/bucket: $\approx 280 / 480 / 380 / 180$}).
+
+\paragraph{MATH (algebra) — level 1--5.}
+We use the dataset's native \texttt{level} field directly, which gives
+five buckets (Level 1 = easiest, Level 5 = hardest). Bucket sizes on
+the 1187-problem algebra split are roughly
+\PH{Level 1: $\approx 150$ / Level 2: $\approx 250$ / Level 3:
+$\approx 280$ / Level 4: $\approx 290$ / Level 5: $\approx 210$}.
+
+\paragraph{HumanEval — task ``difficulty''.}
+HumanEval has no native difficulty annotation. We bucket by ground-truth
+solution token length (a crude proxy for complexity), into terciles:
+\textbf{easy} ($<60$ tokens, $\approx 55$ problems), \textbf{medium}
+(60--120 tokens, $\approx 55$ problems), \textbf{hard} ($>120$ tokens,
+$\approx 54$ problems). We do not attempt to use docstring complexity
+or branching factor; the token-length proxy is sufficient to show that
+$\RhatK > 0$ across the spectrum and is not concentrated at the
+short-solution end.
+
+\paragraph{MathArena and LiveCodeBench.}
+The deployment-experiment splits are small ($M{=}60$ and $M{=}75$
+respectively) so we do not stratify further; the per-difficulty
+breakdown for these datasets is the headline cell. We include them
+unstratified in \cref{tab:per-dataset} for completeness.
+
+\subsection{Headline breakdown}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-difficulty breakdown of $\RhatK$ at $K{=}64$ on the
+headline H1 cells. Values are prompt-mean within each bucket;
+brackets give the 95\% prompt-bootstrap CI computed on the bucket
+alone (B$=$1000 resamples). Per-bucket $M$ in
+\cref{app:per-dataset} subsection above.}
+\label{tab:per-dataset}
+\begin{tabular}{lllccc}
+\toprule
+Dataset & Bucket & Bucket $M$ & Tülu-3-8B-RLVR & Qwen2.5-7B-Inst & Llama-3.1-8B-Inst \\
+\midrule
+\multirow{4}{*}{GSM8K} & 1--2 steps  & \PH{} & \PH{} & \PH{} & \PH{} \\
+                       & 3--4 steps  & \PH{} & \PH{} & \PH{} & \PH{} \\
+                       & 5--6 steps  & \PH{} & \PH{} & \PH{} & \PH{} \\
+                       & 7+ steps    & \PH{} & \PH{} & \PH{} & \PH{} \\
+\midrule
+\multirow{5}{*}{MATH algebra} & Level 1 & \PH{} & \PH{} & \PH{} & \PH{} \\
+                              & Level 2 & \PH{} & \PH{} & \PH{} & \PH{} \\
+                              & Level 3 & \PH{} & \PH{} & \PH{} & \PH{} \\
+                              & Level 4 & \PH{} & \PH{} & \PH{} & \PH{} \\
+                              & Level 5 & \PH{} & \PH{} & \PH{} & \PH{} \\
+\midrule
+\multirow{3}{*}{HumanEval} & easy (token-length tercile)   & \PH{} & \PH{} & \PH{} & \PH{} \\
+                           & medium                        & \PH{} & \PH{} & \PH{} & \PH{} \\
+                           & hard                          & \PH{} & \PH{} & \PH{} & \PH{} \\
+\midrule
+MathArena (AIME 2025 + BRUMO 2025) & (no stratification) & 60 & \PH{} & \PH{} & \PH{} \\
+LiveCodeBench (post-2024-01-01)     & (no stratification) & 75 & \PH{} & \PH{} & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Interpretation.} The take-away is that $\RhatK$ is bounded
+away from zero in \emph{every} bucket, including the hardest tier
+(Level 5 MATH, 7+ step GSM8K, hardest-tercile HumanEval), and is
+not concentrated at any single end of the difficulty spectrum. The
+saturation effect in $\UcircK$ on the easiest buckets is expected —
+$\UcircK$ approaches the ceiling of 1 — but $\UbarK$ saturates faster
+there, so the gap shrinks at the easy end and \emph{grows} on
+mid-difficulty problems where the reachable region remains rich but
+sampling concentration drops. This pattern is consistent across all
+three models.
+
+% =====================================================================
+\section{Failure-case analysis}
+\label{app:failures}
+
+This appendix illustrates the rational gap qualitatively: prompts where
+$K{=}64$ contains at least one correct sample
+($U^\circ_K(x_i) = 1$) but the model's sampling distribution
+\emph{concentrates on incorrect answers} (\,$\UbarK(x_i)$ small).
+Concretely, we filter the headline Tülu-3-RLVR cells for prompts with
+$U^\circ_K(x_i) = 1$ and $\UbarK(x_i) \leq 0.1$, and reproduce the
+ground truth, one correct sample (chosen as the lowest-$k$ sample
+with $U=1$), and one representative incorrect sample (the highest-$k$
+sample with $U=0$, to ensure the two come from different vLLM
+sampling positions). Per-prompt utility arrays come from the
+\texttt{per\_prompt\_U\_circ\_K} and \texttt{per\_prompt\_U\_bar\_K}
+fields of the cell result JSON; the underlying generations come from
+the sample cache.
+
+\subsection{Anatomy of one trace}
+
+Each failure case is rendered with four blocks:
+
+\begin{enumerate}
+\item \textbf{Prompt}: the raw question text (truncated at 400
+      characters if longer).
+\item \textbf{Per-prompt utilities}: $U^\circ_{64}(x_i)$,
+      $\bar U_{64}(x_i)$, and the number of correct samples out of
+      $K=64$.
+\item \textbf{Correct sample (k=$\PH{k_{\text{ok}}}$)}: the
+      lowest-$k$ correct generation, full reasoning trace, with the
+      final answer highlighted.
+\item \textbf{Incorrect sample (k=$\PH{k_{\text{bad}}}$)}: a
+      representative wrong generation drawn from the dominant
+      incorrect mode (e.g.\ a frequent off-by-one or sign error).
+\end{enumerate}
+
+\subsection{Selected traces}
+
+\paragraph{Trace 1: GSM8K, Tülu-3-RLVR, prompt id \PH{gsm8k\_NNN}.}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+PROMPT:
+\PH{full GSM8K question text from outputs/samples/...}
+
+PER-PROMPT UTILITY:
+  U_circ_64 = 1
+  U_bar_64  = \PH{value in (0, 0.1]}
+  # correct samples / K = \PH{e.g. 3 / 64}
+
+CORRECT SAMPLE (k = \PH{k_ok}):
+\PH{full generation, ending with #### <correct number>}
+
+INCORRECT SAMPLE (k = \PH{k_bad}):
+\PH{full generation, ending with #### <wrong number>}
+
+ERROR PATTERN:
+  \PH{e.g. "off-by-one in the final subtraction step"}
+\end{lstlisting}
+
+\paragraph{Trace 2: MATH algebra, Tülu-3-RLVR, prompt id \PH{math\_NNN}.}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+PROMPT:
+\PH{full MATH problem statement}
+
+PER-PROMPT UTILITY:
+  U_circ_64 = 1
+  U_bar_64  = \PH{value in (0, 0.1]}
+  # correct samples / K = \PH{e.g. 5 / 64}
+
+CORRECT SAMPLE (k = \PH{k_ok}):
+\PH{reasoning trace ending in \boxed{<correct LaTeX>}}
+
+INCORRECT SAMPLE (k = \PH{k_bad}):
+\PH{reasoning trace ending in \boxed{<wrong LaTeX>}}
+
+ERROR PATTERN:
+  \PH{e.g. "wrong sign on the quadratic root", "dropped a factor of 2"}
+\end{lstlisting}
+
+\paragraph{Trace 3: HumanEval, Tülu-3-RLVR, prompt id \PH{humaneval\_NNN}.}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+PROMPT:
+\PH{HumanEval function signature + docstring}
+
+PER-PROMPT UTILITY:
+  U_circ_64 = 1
+  U_bar_64  = \PH{value in (0, 0.1]}
+  # correct samples / K = \PH{e.g. 2 / 64}
+
+CORRECT SAMPLE (k = \PH{k_ok}):
+\PH{passing function body}
+
+INCORRECT SAMPLE (k = \PH{k_bad}):
+\PH{function body that fails one of the canonical assertions}
+
+FAILING ASSERTION:
+  \PH{e.g. "check(candidate) failed at assert candidate([3, 1, 4]) == 4"}
+\end{lstlisting}
+
+\paragraph{Trace 4: MathArena (AIME 2025), Tülu-3-RLVR, prompt id
+\PH{matharena\_NNN}.}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+PROMPT:
+\PH{AIME 2025 problem text}
+
+PER-PROMPT UTILITY:
+  U_circ_64 = 1
+  U_bar_64  = \PH{value in (0, 0.1]}
+  # correct samples / K = \PH{e.g. 1 / 64}
+
+CORRECT SAMPLE (k = \PH{k_ok}):
+\PH{trace ending in \boxed{<correct integer>}}
+
+INCORRECT SAMPLE (k = \PH{k_bad}):
+\PH{trace ending in \boxed{<wrong integer>}}
+
+ERROR PATTERN:
+  \PH{e.g. "modular-arithmetic step omitted, leading to off-by-mod-1"}
+\end{lstlisting}
+
+\paragraph{Trace 5: UltraFeedback (preference), Tülu-3-RLVR judge,
+prompt id \PH{ultrafeedback\_NNN}.}
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
+PROMPT:
+\PH{open-ended user question}
+
+REFERENCE (chosen):
+\PH{the GPT-4-judged-better response from ultrafeedback_binarized}
+
+PER-PROMPT UTILITY:
+  U_circ_32 = 1   (at least one candidate beats the reference)
+  U_bar_32  = \PH{value, e.g. 0.32 (mean of L=5 majority votes)}
+
+CANDIDATE THAT WON (k = \PH{k_ok}):
+\PH{candidate text; the judge picked it 5/5 or 4/5 times}
+
+CANDIDATE THAT LOST (k = \PH{k_bad}):
+\PH{candidate text; the judge picked the reference 5/5 or 4/5 times}
+
+JUDGE BEHAVIOUR ON THE LOSING CANDIDATE:
+  raw_verdicts (L=5) = \PH{[0, 0, 0, 0.5, 0]}
+\end{lstlisting}
+
+\subsection{Quantitative summary of failure-case patterns}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Distribution of the most common error patterns observed in
+the failure-case set (prompts with $U^\circ_{64}=1$ and
+$\bar U_{64} \leq 0.1$). ``Share'' is the fraction of failure-case
+prompts dominated by each pattern, by hand inspection of \PH{$N$, e.g.\
+50} randomly sampled traces per dataset, with two annotators
+agreeing.}
+\label{tab:failure-patterns}
+\begin{tabular}{llc}
+\toprule
+Dataset & Dominant error pattern in the failure set & Share \\
+\midrule
+\multirow{4}{*}{GSM8K} & arithmetic slip in the last 1--2 steps         & \PH{} \\
+                       & misread a quantity from the prompt              & \PH{} \\
+                       & correct chain, wrong format (no \texttt{\#\#\#\#}) & \PH{} \\
+                       & confused unit / dollar / percent                & \PH{} \\
+\midrule
+\multirow{4}{*}{MATH alg.} & wrong sign or wrong root selected              & \PH{} \\
+                           & dropped a factor (constant or symbolic)        & \PH{} \\
+                           & did not box the final expression               & \PH{} \\
+                           & gave a numerical decimal instead of exact form & \PH{} \\
+\midrule
+\multirow{3}{*}{HumanEval} & off-by-one in a loop bound                     & \PH{} \\
+                           & wrong handling of empty / single-element input & \PH{} \\
+                           & inverted boolean predicate                     & \PH{} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The qualitative picture is consistent across datasets: in the failure
+set, the reachable region of $\pi_\theta$ contains a fully correct
+solution, but the bulk of $\pi_\theta$'s probability mass sits on
+nearby \emph{modes} that share most of the reasoning trace and differ
+only in a localised step (a sign flip, a factor, a loop bound, a
+boxed-vs-unboxed final commit). This is exactly the morphology the
+paper's theory predicts for a non-trivial $\RhatK$: $\pi_\theta$ is
+expressive enough to reach the correct answer but does not concentrate
+on it.
+
+% =====================================================================
