@@ -56,11 +56,17 @@ echo "  HF cache:      $HF_HOME"
 [ -n "${HF_ENDPOINT:-}" ] && echo "  HF endpoint:   $HF_ENDPOINT"
 mkdir -p "$OUTPUTS_ROOT" "$HF_HOME"
 
-if command -v nvidia-smi >/dev/null 2>&1; then
-    nvidia-smi -L
-    nvidia-smi --query-gpu=name,memory.total,memory.free,driver_version --format=csv | head -10
+# Robust GPU-presence check: in AutoDL no-card mode, `nvidia-smi -L` prints
+# "No devices found." and may exit 0, so test for an actual "GPU" line. Guard
+# every nvidia-smi call with `|| true` so a no-GPU box can't trip `set -e`/pipefail.
+if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q "GPU"; then
+    nvidia-smi -L || true
+    { nvidia-smi --query-gpu=name,memory.total,memory.free,driver_version --format=csv | head -10; } || true
 else
-    echo "  (no nvidia-smi — will install CPU-only PyTorch unless PYTORCH_INDEX overridden)"
+    # No GPU visible now (e.g. AutoDL no-card setup mode). We still install
+    # the CUDA build (PYTORCH_INDEX defaults to cu124) so the env is ready
+    # once GPUs attach; CUDA availability is verified at runtime, not here.
+    echo "  (no GPU visible now — installing CUDA wheels anyway; verified at runtime)"
 fi
 
 # Locate conda.sh.

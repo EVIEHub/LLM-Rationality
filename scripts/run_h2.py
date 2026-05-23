@@ -125,13 +125,35 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument(
         "--dataset", required=True,
-        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback"],
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback", "alpaca_eval"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64)
     parser.add_argument("--num-prompts", type=int, default=None)
     parser.add_argument("--max-tokens", type=int, default=1024)
     parser.add_argument("--gpu-mem", type=float, default=0.85)
+    parser.add_argument(
+        "--api-concurrency", type=int, default=20,
+        help="Max in-flight API judge requests when --judge api.",
+    )
+    parser.add_argument(
+        "--judge", choices=["self", "api"], default="self",
+        help="Preference judge backend: 'self' (fixed vLLM judge) or 'api' (hosted).",
+    )
+    parser.add_argument(
+        "--judge-model", default="deepseek-v4-flash",
+        help="models.yaml alias of the API judge when --judge api.",
+    )
+    parser.add_argument(
+        "--judge-local-model", default=None,
+        help="models.yaml alias of a fixed local vLLM judge for --judge self, "
+             "overriding the default fixed Tulu-3-RLVR judge (e.g. "
+             "qwen2.5-14b-instruct for an independent judge-robustness re-run).",
+    )
+    parser.add_argument(
+        "--judge-L", type=int, default=None,
+        help="Override judge calls per pair (default: ds_cfg.judge_L, or 3 for API).",
+    )
     args = parser.parse_args()
 
     paths = load_paths()
@@ -179,6 +201,11 @@ def main() -> None:
                 part = part.select(range(min(n, len(part))))
             parts.append(part)
         raw_ds = concatenate_datasets(parts)
+    elif ds_cfg.get("hf_data_file"):
+        from huggingface_hub import hf_hub_download
+        fp = hf_hub_download(ds_cfg["hf_id"], ds_cfg["hf_data_file"], repo_type="dataset")
+        log.info("Loading hub file: %s/%s", ds_cfg["hf_id"], ds_cfg["hf_data_file"])
+        raw_ds = load_dataset("json", data_files=fp, split="train")
     else:
         ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
         if ds_cfg.get("hf_config"):
@@ -318,11 +345,60 @@ def main() -> None:
     M = len(records)
     samples_per_prompt = [rec["samples"] for rec in records]
 
-    if ds_cfg.get("verifier") == "self_judge":
+    if ds_cfg.get("verifier") == "self_judge" and args.judge == "api":
+        # --- preference mode: hosted API judge (no GPU), fixed across stages ---
+        from src.sampling.api_runner import ApiModelSpec
+        from src.verification.api_judge import score_matrix_api
+        judge_cfg = models_cfg[args.judge_model]
+        spec = ApiModelSpec.from_model_cfg(judge_cfg)
+        L_judge = int(args.judge_L or ds_cfg.get("judge_L", 3))
+        resume = paths.samples_dir / f"apijudge_{key.fingerprint()}_{args.judge_model}.jsonl"
+        log.info(
+            "Preference mode (API judge=%s, fixed across stages): %d * %d * L=%d calls",
+            args.judge_model, M, args.K, L_judge,
+        )
+        outcome = score_matrix_api(
+            spec,
+            raw_prompts=raw_user_prompts,
+            candidates=samples_per_prompt,
+            references=ground_truths,
+            L=L_judge,
+            seed=args.seed,
+            concurrency=args.api_concurrency,
+            resume_path=resume,
+        )
+        utility = outcome.utility.astype(float)
+        log.info(
+            "API judge done: parse_failure_rate=%.4f, n_calls=%d",
+            outcome.parse_failure_rate, outcome.n_judge_calls,
+        )
+        for i in range(M):
+            for k in range(args.K):
+                log_verifier_decision(
+                    paths.logs_dir, args.dataset,
+                    {
+                        "experiment": experiment,
+                        "prompt_id": records[i]["prompt_id"],
+                        "k": k,
+                        "utility": float(utility[i, k]),
+                        "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "judge": args.judge_model,
+                        "seed": args.seed,
+                    },
+                )
+    elif ds_cfg.get("verifier") == "self_judge":
         from src.verification.self_judge import score_matrix
-        L_judge = int(ds_cfg.get("judge_L", 5))
-        # FIXED judge — Tulu-3-RLVR (the post-alignment checkpoint).
-        judge_hf_id = "allenai/Llama-3.1-Tulu-3-8B"
+        L_judge = int(args.judge_L or ds_cfg.get("judge_L", 5))
+        # FIXED judge — default Tulu-3-RLVR (the post-alignment checkpoint),
+        # held constant across SFT/DPO/RLVR stages. --judge-local-model
+        # overrides it with any models.yaml alias (e.g. an independent
+        # Qwen2.5-14B for a judge-robustness re-run).
+        # NOTE: 8B RLVR default; for 70B self-judge this would need the 70B
+        # RLVR. Server B uses --judge api, so this path is unused there.
+        if args.judge_local_model:
+            judge_hf_id = models_cfg[args.judge_local_model]["hf_id"]
+        else:
+            judge_hf_id = "allenai/Llama-3.1-Tulu-3-8B"
         judge_tokenizer = AutoTokenizer.from_pretrained(judge_hf_id)
         log.info(
             "Preference mode: %d * %d * L=%d = %d judge calls; "
@@ -446,7 +522,16 @@ def main() -> None:
         "per_prompt_U_bar_K": est.per_prompt_U_bar_K.tolist(),
         "sampling_seconds": sample_seconds,
     }
-    out_path = h2_dir / f"{args.model}_{args.dataset}_seed{args.seed}.json"
+    # Tag the filename with the judge when it is not the default (fixed RLVR),
+    # so an independent-judge re-run sits alongside the original instead of
+    # overwriting it (needed for the judge-robustness comparison).
+    if ds_cfg.get("verifier") == "self_judge" and args.judge == "api":
+        judge_tag = f"_judge-{args.judge_model}"
+    elif ds_cfg.get("verifier") == "self_judge" and args.judge_local_model:
+        judge_tag = f"_judge-{args.judge_local_model}"
+    else:
+        judge_tag = ""
+    out_path = h2_dir / f"{args.model}_{args.dataset}{judge_tag}_seed{args.seed}.json"
     out_path.write_text(json.dumps(results, indent=2))
 
     # --- print summary ---------------------------------------------------

@@ -40,8 +40,10 @@ from src.sampling.vllm_runner import SamplingConfig
 
 logger = logging.getLogger(__name__)
 
-# Retry policy for transient proxy failures.
-_RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504}
+# Retry policy for transient proxy failures. Includes the Cloudflare-style
+# 52x codes and 544 ("Error return from script") seen from the DeepSeek
+# proxy — all server-side/transient, so safe to retry rather than abort a cell.
+_RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504, 520, 521, 522, 524, 544}
 _MAX_RETRIES = 6
 _BACKOFF_BASE_S = 2.0
 _BACKOFF_MAX_S = 60.0
@@ -54,6 +56,7 @@ class ApiModelSpec:
     api_model: str           # model name sent in the request body
     base_url: str            # e.g. https://.../v1
     api_key: str             # bearer token
+    reasoning_effort: str | None = None  # e.g. "minimal" to disable long reasoning
 
     @classmethod
     def from_model_cfg(cls, model_cfg: dict[str, Any]) -> "ApiModelSpec":
@@ -80,6 +83,7 @@ class ApiModelSpec:
             api_model=model_cfg.get("api_model", model_cfg["hf_id"]),
             base_url=base_url.rstrip("/"),
             api_key=api_key,
+            reasoning_effort=model_cfg.get("reasoning_effort"),
         )
 
 
@@ -155,6 +159,11 @@ class ApiRunner:
             "top_p": cfg.top_p,
             "seed": seed,  # best-effort reproducibility hint
         }
+        # Disable long reasoning for reasoning models that would otherwise
+        # exceed a proxy gateway timeout (e.g. gpt-5.5 -> 504). Keeps the
+        # subject comparable to the other non-thinking chat models.
+        if self.spec.reasoning_effort:
+            body["reasoning_effort"] = self.spec.reasoning_effort
         headers = {
             "Authorization": f"Bearer {self.spec.api_key}",
             "Content-Type": "application/json",

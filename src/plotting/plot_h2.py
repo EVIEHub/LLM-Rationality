@@ -92,7 +92,7 @@ def _render_scope(
                            fontsize=9)
         ax.set_xlabel("trajectory stage")
         if j == 0:
-            ax.set_ylabel(r"value at $K=K_{\max}$")
+            ax.set_ylabel(r"value at $K=K_{\max}$", fontsize=14)
         K_max = cells[0].get("K_max", 64)
         ax.set_title(f"{ds}  ($K_{{\\max}}$={K_max})", fontsize=10)
         ax.set_ylim(0, 1.05)

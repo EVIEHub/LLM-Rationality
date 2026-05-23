@@ -60,7 +60,7 @@ def _render_scope(scope, cells, figures_dir):
         ax.set_xticklabels([str(L) for L in Ls], fontsize=8)
         ax.set_xlabel(r"$L$  (max reasoning tokens)")
         if j == 0:
-            ax.set_ylabel(r"value at $K=K_{\max}$")
+            ax.set_ylabel(r"value at $K=K_{\max}$", fontsize=14)
         ax.set_title(
             f"{ds}  ($K_{{\\max}}$={ds_cells[0]['K_max']}, "
             f"M={ds_cells[0]['M']})",

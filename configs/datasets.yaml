@@ -154,6 +154,66 @@ ultrafeedback:
       user_template: "{prompt}"
   prompt_template_version: "v1"
 
+bbh:
+  # H4 non-math diversity axis. BIG-Bench Hard (Suzgun et al. 2022): a
+  # suite of hard tasks spanning many *reasoning types* (logical deduction,
+  # temporal/causal reasoning, fallacy detection, spatial tracking, ...),
+  # not just arithmetic. This is what lets H4's length sweep speak to
+  # reasoning length in general, rather than math-answer length specifically.
+  #
+  # `lukaemon/bbh` is a multi-config dataset: one config per task, each row
+  # {input, target}, split "test" (250 examples/task). We list 24 of the 27
+  # tasks as `subsets` (loaded as configs of the same hf_id, then
+  # concatenated). Excluded: word_sorting + dyck_languages (free-form token
+  # *sequences* — no short canonical answer, so budget forcing can't make
+  # them cleanly verifiable) and multistep_arithmetic_two (math, already
+  # covered by gsm8k/math). The retained tasks all have a short answer in
+  # one of three shapes the bbh verifier dispatches on: a parenthesised
+  # choice letter "(A)".."(R)", a boolean/token (True/False, Yes/No,
+  # valid/invalid), or a bare integer (object_counting).
+  #
+  # 24 tasks x prompts_per_subset=20 = 480 prompts. Run H4 with
+  # --num-prompts 480 to keep every task represented (the loader
+  # concatenates in `subsets` order, so a smaller slice would drop whole
+  # tasks from the tail).
+  hf_id: "lukaemon/bbh"
+  subsets:
+    - "boolean_expressions"
+    - "causal_judgement"
+    - "date_understanding"
+    - "disambiguation_qa"
+    - "formal_fallacies"
+    - "geometric_shapes"
+    - "hyperbaton"
+    - "logical_deduction_three_objects"
+    - "logical_deduction_five_objects"
+    - "logical_deduction_seven_objects"
+    - "movie_recommendation"
+    - "navigate"
+    - "object_counting"
+    - "penguins_in_a_table"
+    - "reasoning_about_colored_objects"
+    - "ruin_names"
+    - "salient_translation_error_detection"
+    - "snarks"
+    - "sports_understanding"
+    - "temporal_sequences"
+    - "tracking_shuffled_objects_three_objects"
+    - "tracking_shuffled_objects_five_objects"
+    - "tracking_shuffled_objects_seven_objects"
+    - "web_of_lies"
+  prompts_per_subset: 20
+  split: "test"
+  verifier: "bbh"
+  prompt_field: "input"
+  ground_truth_field: "target"
+  test_size: 480
+  templates:
+    chat:
+      system: "Reason step by step about the following problem. Then state your final answer. For multiple-choice questions answer with the option letter in parentheses, e.g. (A). For yes/no, true/false, or valid/invalid questions answer with exactly that word. For counting questions answer with the number."
+      user_template: "{input}"
+  prompt_template_version: "v1"
+
 humaneval:
   hf_id: "openai/openai_humaneval"
   hf_config: null
@@ -170,4 +230,23 @@ humaneval:
     few_shot:
       examples_path: "configs/few_shot/humaneval_3shot.txt"  # TODO: create when H2 lands
       user_template: "{prompt}"
+  prompt_template_version: "v1"
+
+alpaca_eval:
+  # 2nd preference dataset (paired with ultrafeedback). AlpacaEval's 805
+  # single-turn instructions, each with a text-davinci-003 reference output
+  # used as the human-preferred reference y^+. Same self_judge ternary
+  # comparison as ultrafeedback. Loaded via hf_data_file (the dataset's
+  # loading script is unsupported by the current datasets lib).
+  hf_id: "tatsu-lab/alpaca_eval"
+  hf_data_file: "alpaca_eval.json"
+  split: "train"                     # load_dataset("json", ...) yields a 'train' split
+  verifier: "self_judge"
+  prompt_field: "instruction"
+  ground_truth_field: "output"       # text-davinci-003 reference response
+  test_size: 300
+  templates:
+    chat:
+      system: ""
+      user_template: "{instruction}"
   prompt_template_version: "v1"

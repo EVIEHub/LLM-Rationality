@@ -84,7 +84,7 @@ def _render_scope(
         if i == n_m - 1:
             ax.set_xlabel(r"$K$ (sampling budget)", fontsize=9)
         if j == 0:
-            ax.set_ylabel(r"value", fontsize=9)
+            ax.set_ylabel(r"value", fontsize=14)
         ax.set_title(
             f"{r['model']}  ×  {r['dataset']}",
             fontsize=9,

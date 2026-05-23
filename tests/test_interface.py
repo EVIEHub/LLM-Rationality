@@ -78,7 +78,7 @@ def test_known_datasets_lists_all_registered() -> None:
     assert set(known_datasets()) == {
         "gsm8k", "math", "humaneval",
         "matharena", "livecodebench",
-        "self_judge",
+        "bbh", "self_judge",
     }
 
 

@@ -14,10 +14,29 @@ from __future__ import annotations
 
 from typing import Any
 
+# Paper figure style, applied on import so every plotter shares it.
+# Times New Roman (with metric-compatible fallbacks for Linux boxes that
+# lack the proprietary font) + larger axis/tick fonts for readability.
+import matplotlib as _mpl
+
+_mpl.rcParams.update({
+    "font.family": "serif",
+    "font.serif": [
+        "Times New Roman", "Liberation Serif", "Nimbus Roman No9 L",
+        "Times", "DejaVu Serif",
+    ],
+    "mathtext.fontset": "stix",   # Times-like math to match the serif text
+    "axes.labelsize": 14,         # x/y axis labels
+    "axes.titlesize": 13,
+    "ytick.labelsize": 13,        # y-axis tick numbers (larger, as requested)
+    "xtick.labelsize": 11,
+    "legend.fontsize": 10,
+})
+
 SCOPE_DATASETS: dict[str, list[str]] = {
-    "development": ["gsm8k", "math", "humaneval"],
+    "development": ["gsm8k", "math", "humaneval", "bbh"],
     "deployment":  ["matharena", "livecodebench"],
-    "preference":  ["ultrafeedback"],
+    "preference":  ["ultrafeedback", "alpaca_eval"],
 }
 
 

@@ -66,6 +66,16 @@ qwen2.5-7b-instruct:
   prompt_mode: "chat"
   supports_system_prompt: true
 
+qwen2.5-14b-instruct:
+  # Fixed independent LLM-as-judge for the preference re-judge (--judge-local-model).
+  # Stronger than the 8B candidate models and not one of them, so it removes the
+  # strict-self self-preference bias. Fits one 80GB card; runs free on idle GPUs.
+  hf_id: "Qwen/Qwen2.5-14B-Instruct"
+  family: "qwen"
+  size_b: 14.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+
 llama3.1-8b-instruct:
   hf_id: "meta-llama/Llama-3.1-8B-Instruct"
   family: "llama"
@@ -91,6 +101,19 @@ gpt-5.2-chat:
   api_key_env: "TP_API_KEY"
   notes: "Frontier hosted model via third-party proxy. H5 API subject (H1/H3 only). Caveat: ChatGPT-account proxy with a daily message quota — relies on ApiRunner per-(prompt,k) resume cache."
 
+gpt-5.5:
+  hf_id: "gpt-5.5"
+  family: "openai"
+  size_b: 0.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  backend: "api"
+  api_model: "gpt-5.5"
+  api_base_url_env: "TP_BASE_URL"
+  api_key_env: "TP_API_KEY"
+  reasoning_effort: "minimal"   # non-thinking: full reasoning -> proxy 504 gateway timeout
+  notes: "Newest frontier hosted model via the same proxy as gpt-5.2-chat. H5 API subject, NON-THINKING (reasoning_effort=minimal) because full reasoning exceeds the proxy gateway timeout (504). Same-mode comparison to gpt-5.2-chat. Floating tag — record access date. ChatGPT-account quota => 429 throttling, relies on ApiRunner retry/resume."
+
 deepseek-v4-flash:
   hf_id: "deepseek-v4-flash"
   family: "deepseek"
@@ -102,6 +125,69 @@ deepseek-v4-flash:
   api_base_url_env: "DS_BASE_URL"
   api_key_env: "DS_API_KEY"
   notes: "DeepSeek V4 Flash via official metered API (no quota cap). Pinned version => reproducible. Reasoning model: answer lands in message.content (ApiRunner reads it); needs high max_tokens (>=16000) so hard-problem reasoning finishes before emitting boxed answer. H5 API subject (H1/H3 only)."
+
+# === 70B-scale subjects (server B, 4x A800-80GB, TP=4) ===
+# Run with --tp 4. Disk holds one ~140 GB model at a time (176 GB volume),
+# so the H2 Tülu-70B trajectory rotates (download -> run -> delete).
+# qwen2.5-72b is the single non-H2 subject (H1/H3/H4/H5 + preference H1/H3).
+
+qwen2.5-72b-instruct:
+  hf_id: "Qwen/Qwen2.5-72B-Instruct"
+  family: "qwen"
+  size_b: 72.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  notes: "70B-scale single subject for all non-H2 experiments on server B (TP=4). ~145 GB bf16."
+
+qwen2.5-72b-instruct-awq:
+  # AWQ INT4 single-GPU variant for HumanEval-72B: INT8 OOM'd on the activation
+  # (73GB weights left no room on 80GB); INT4 (~40GB) fits with lots of KV
+  # headroom. Slight extra quantization loss vs INT8/bf16 (acceptable, footnoted).
+  hf_id: "Qwen/Qwen2.5-72B-Instruct-AWQ"
+  family: "qwen"
+  size_b: 72.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  notes: "AWQ INT4 single-GPU (TP=1) HumanEval-72B fallback (INT8 OOMed)."
+
+qwen2.5-72b-instruct-int8:
+  # Single-GPU INT8 (GPTQ) variant of Qwen2.5-72B, used ONLY for the
+  # HumanEval-72B cell: bf16 TP=4 hit an unfixable all-reduce CUDA bug on
+  # HumanEval, so we run quantized on ONE GPU (TP=1 => no all-reduce). INT8
+  # is near-lossless vs bf16. Footnote in the paper for this one cell.
+  hf_id: "Qwen/Qwen2.5-72B-Instruct-GPTQ-Int8"
+  family: "qwen"
+  size_b: 72.0
+  prompt_mode: "chat"
+  supports_system_prompt: true
+  notes: "INT8 GPTQ, single-GPU (TP=1) HumanEval-72B workaround for the bf16 TP all-reduce failure."
+
+tulu3-70b-sft:
+  hf_id: "allenai/Llama-3.1-Tulu-3-70B-SFT"
+  family: "tulu"
+  size_b: 70.0
+  prompt_mode: "chat"
+  trajectory_stage: "sft"
+  supports_system_prompt: true
+  notes: "H2-70B trajectory stage 1. TP=4, rotation (delete before next stage)."
+
+tulu3-70b-dpo:
+  hf_id: "allenai/Llama-3.1-Tulu-3-70B-DPO"
+  family: "tulu"
+  size_b: 70.0
+  prompt_mode: "chat"
+  trajectory_stage: "dpo"
+  supports_system_prompt: true
+  notes: "H2-70B trajectory stage 2. TP=4, rotation."
+
+tulu3-70b-rlvr:
+  hf_id: "allenai/Llama-3.1-Tulu-3-70B"
+  family: "tulu"
+  size_b: 70.0
+  prompt_mode: "chat"
+  trajectory_stage: "rlvr"
+  supports_system_prompt: true
+  notes: "H2-70B trajectory final (RLVR). TP=4. Also the fixed judge for H2-70B preference (analogue of the 8B run)."
 
 # === Smoke-test / fast-iteration models ===
 

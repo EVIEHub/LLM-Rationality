@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Callable, Mapping
 
-from src.verification import gsm8k, humaneval, livecodebench, matharena
+from src.verification import bbh, gsm8k, humaneval, livecodebench, matharena
 from src.verification import math as math_verifier  # avoid shadowing stdlib name in callers
 
 
@@ -43,6 +43,7 @@ def _self_judge_marker(generation: str, ground_truth: str) -> float:
 
 _REGISTRY: Mapping[str, Verifier] = {
     "gsm8k": gsm8k.verify,
+    "bbh": bbh.verify,
     "math": math_verifier.verify,
     "humaneval": humaneval.verify,
     "matharena": matharena.verify,

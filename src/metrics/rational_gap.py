@@ -160,6 +160,71 @@ def R_hat_at_K(utilities: np.ndarray, K: int) -> float:
     return U_circ_at_K(utilities, K) - U_bar_at_K(utilities, K)
 
 
+def p_hat_at_K(utilities: np.ndarray, K: int) -> np.ndarray:
+    """Per-prompt single-sample success probability $\\hat p_x$ from the first $K$ columns.
+
+    $$\\hat p_x = \\tfrac{1}{K}\\sum_{k=1}^{K} U(x_i, y_{i,k}).$$
+
+    This is the empirical $p_x = \\Pr_{\\hat y\\sim d_\\theta}[U(x,\\hat y)=1]$
+    of Lemma 2 (exact for binary $U$). Returned per prompt (shape $(M,)$)
+    so callers can histogram it or bucket by difficulty.
+
+    Args:
+        utilities: Float array $(M, n_\\text{max})$.
+        K: Sampling budget; ``1 <= K <= n_max``.
+    """
+    if utilities.ndim != 2:
+        raise ValueError(f"utilities must be 2D, got shape {utilities.shape}")
+    n_max = utilities.shape[1]
+    if K < 1 or K > n_max:
+        raise ValueError(f"K={K} outside [1, {n_max}]")
+    return utilities[:, :K].mean(axis=1).astype(float, copy=False)
+
+
+def A_at_K(utilities: np.ndarray, K: int) -> float:
+    r"""Compute-approximation error $A_K$ of Lemma 2 from the first $K$ columns.
+
+    Under the ground-truth normalisation $\mathcal{R}=1$ (a perfectly
+    rational answer always scores 1),
+
+    $$A_K = \mathcal{R} - \mathcal{R}_K = 1 - U^\circ_K
+          = \mathbb{E}_x\big[(1-p_x)^K\big].$$
+
+    For binary $U$ this is the **unbiased** estimate at budget $K$ and equals
+    the fraction of prompts with no correct sample among the first $K$. Its
+    value at $K=n_\text{max}$ estimates the irreducible floor
+    $\Pr(p_x=0)$ — the unreachable mass that no finite budget removes, on
+    which $\hat{\mathcal{R}}_K$ is not estimable. Monotone non-increasing in $K$.
+
+    Args:
+        utilities: Float array $(M, n_\text{max})$.
+        K: Sampling budget; ``1 <= K <= n_max``.
+    """
+    return 1.0 - U_circ_at_K(utilities, K)
+
+
+def A_K_extrapolated(p_hat: np.ndarray, K_target: int) -> float:
+    r"""Plug-in extrapolation of $A_K$ to an arbitrary budget $K_\text{target}$.
+
+    $$\hat A_{K_\text{target}} = \tfrac{1}{M}\sum_x (1-\hat p_x)^{K_\text{target}}.$$
+
+    Use only to project the $A_K$ curve **beyond** the sampled budget; it is
+    biased (the all-fail prompts with $\hat p_x=0$ pin their term at 1, so the
+    estimate floors at the empirical unreachable mass). For $K_\text{target}$
+    within the sampled budget prefer :func:`A_at_K`, which is unbiased.
+
+    Args:
+        p_hat: Per-prompt $\hat p_x$ array (shape $(M,)$), e.g. from
+            :func:`p_hat_at_K`.
+        K_target: Target budget; ``>= 1``.
+    """
+    if p_hat.ndim != 1:
+        raise ValueError(f"p_hat must be 1D, got shape {p_hat.shape}")
+    if K_target < 1:
+        raise ValueError(f"K_target must be >= 1, got {K_target}")
+    return float(np.mean((1.0 - p_hat) ** K_target))
+
+
 def bootstrap_ci_over_prompts(
     per_prompt_values: np.ndarray,
     *,

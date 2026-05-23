@@ -52,7 +52,35 @@ class VllmRunner:
     """
 
     def __init__(self, hf_id: str, **vllm_kwargs: Any) -> None:
+        import os
+
         from vllm import LLM
+
+        # Multi-GPU sharding for large models (e.g. 70B on 4 GPUs). Read from
+        # env vars (default 1) unless the caller passes them explicitly, so
+        # panels can opt into parallelism without editing every call site.
+        #   RG_TP — tensor parallel (per-layer all-reduce; needs fast GPU P2P)
+        #   RG_PP — pipeline parallel (activations passed between stages; far
+        #           less inter-GPU traffic — preferred on PCIe boxes without
+        #           NVLink/P2P, where TP all-reduce is bottlenecked).
+        vllm_kwargs.setdefault(
+            "tensor_parallel_size", int(os.environ.get("RG_TP", "1"))
+        )
+        vllm_kwargs.setdefault(
+            "pipeline_parallel_size", int(os.environ.get("RG_PP", "1"))
+        )
+        # RG_DISABLE_CUSTOM_AR=1 falls back from vLLM's custom all-reduce to
+        # NCCL. The custom kernel can hit an illegal-memory-access on some
+        # input shapes under TP (observed on 72B + HumanEval); NCCL is slower
+        # but robust. Harmless when TP=1 (no all-reduce).
+        if os.environ.get("RG_DISABLE_CUSTOM_AR", "0") == "1":
+            vllm_kwargs.setdefault("disable_custom_all_reduce", True)
+        # RG_MAX_NUM_SEQS caps the concurrent batch. Smaller batches keep the
+        # TP all-reduce tensors small, dodging the CUDA illegal-memory-access
+        # the all-reduce kernels hit on large batches (72B + HumanEval, K=64).
+        _max_seqs = os.environ.get("RG_MAX_NUM_SEQS")
+        if _max_seqs:
+            vllm_kwargs.setdefault("max_num_seqs", int(_max_seqs))
 
         self.hf_id = hf_id
         self._llm: Any | None = LLM(model=hf_id, **vllm_kwargs)

@@ -1,20 +1,21 @@
-"""H3 figures — rational gap per inference procedure.
+"""H3 figures — REU / AEU / RVR across inference procedures.
 
-Two figures:
+Two combined figures (development + deployment datasets together, never
+split by scope):
 
   h3_sc_saturation.{pdf,png}
-      $\\hat{\\mathcal{R}}_K(\\pi_{\\text{SC}(n)})$ vs $n$ for each
-      (model, dataset). One curve per model; one panel per dataset.
-      Headline plot for the SC saturation finding.
+      Self-consistency SC($n$): REU, AEU, RVR vs $n$. Grid of
+      (model x dataset) panels; one panel per cell, three lines.
+      Only the answer-extractable datasets appear (GSM8K, MATH,
+      MathArena) — SC needs a key to vote on.
 
-  h3_procedures.{pdf,png}
-      Bar chart of $\\hat{\\mathcal{R}}_K$ across all evaluated
-      procedures (direct $\\tau \\in \\{0, 0.7, 1.0\\}$ and
-      SC at $n \\in \\{2, 4, 8, 16, 32\\}$) for each (model, dataset).
-      Supplementary plot for the procedure-comparison view.
+  h3_temperature.{pdf,png}
+      Direct sampling: REU, AEU, RVR vs decoding temperature
+      $\\tau \\in \\{0, 0.7, 1.0\\}$. Grid of (model x dataset) panels.
+      RVR is drawn as a solid line; REU and AEU as dotted lines.
+      Greedy ($\\tau{=}0$) is deterministic so REU=AEU and RVR=0.
 
-Reads ``${results_dir}/h3/<model>_<dataset>_t<tau>_seed<S>.json`` and
-``${results_dir}/h3/<model>_<dataset>_sc_n<n>_seed<S>.json``.
+Reads ``${results_dir}/h3/*.json``.
 
 Usage:
     python -m src.plotting.plot_h3
@@ -23,194 +24,188 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
 from typing import Any
 
 import matplotlib.pyplot as plt
-import numpy as np
 
 from src.pipeline.paths import load_paths
-from src.plotting._common import SCOPE_DATASETS, datasets_in_scope, split_cells_by_scope
+
+# Times New Roman look (falls back to metric-compatible clones if the
+# exact font is not installed) + larger fonts, with the y-axis emphasised.
+plt.rcParams.update({
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "Nimbus Roman", "Liberation Serif",
+                   "STIXGeneral", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+    "font.size": 13,
+    "axes.titlesize": 15,
+    "axes.labelsize": 15,
+    "xtick.labelsize": 13,
+    "ytick.labelsize": 15,
+    "legend.fontsize": 12,
+})
 
 
-_DIRECT_RE = re.compile(r"^(.+?)_(gsm8k|math|humaneval)_t([\d\.]+)_seed(\d+)\.json$")
-_SC_RE = re.compile(r"^(.+?)_(gsm8k|math|humaneval)_sc_n(\d+)_seed(\d+)\.json$")
+# Canonical ordering for the figure grids (Conversation -> Development ->
+# Deployment); only datasets actually present are shown.
+_DATASET_ORDER = [
+    ("ultrafeedback", "UltraFeedback"), ("alpaca_eval", "AlpacaEval"),
+    ("gsm8k", "GSM8K"), ("math", "MATH"), ("humaneval", "HumanEval"),
+    ("matharena", "MathArena"), ("livecodebench", "LiveCodeBench"),
+]
+_MODEL_ORDER = [
+    ("tulu3-8b-rlvr", "Tülu-3-8B-RLVR"),
+    ("qwen2.5-7b-instruct", "Qwen2.5-7B-Instruct"),
+    ("llama3.1-8b-instruct", "Llama-3.1-8B-Instruct"),
+]
 
-_MODEL_COLORS = {
-    "tulu3-8b-rlvr":         "#1f77b4",
-    "qwen2.5-7b-instruct":   "#2ca02c",
-    "llama3.1-8b-instruct":  "#d62728",
-}
-_MODEL_LABELS = {
-    "tulu3-8b-rlvr":         "Tülu-3-8B (RLVR)",
-    "qwen2.5-7b-instruct":   "Qwen2.5-7B-Instruct",
-    "llama3.1-8b-instruct":  "Llama-3.1-8B-Instruct",
-}
+# REU / AEU / RVR line styles. RVR solid; REU / AEU dotted.
+_METRIC_STYLE = [
+    ("U_circ_K", "REU", "#3B75AF", "^", ":"),   # blue, dotted
+    ("U_bar_K",  "AEU", "#EF8636", "v", ":"),   # orange, dotted
+    ("R_hat_K",  "RVR", "#519E3E", "o", "-"),   # green, solid
+]
+
+_TAUS = [0.0, 0.7, 1.0]
 
 
 def _load_cells(h3_dir: Path) -> list[dict[str, Any]]:
     cells: list[dict[str, Any]] = []
     for json_path in sorted(h3_dir.glob("*.json")):
         d = json.loads(json_path.read_text())
-        proc = d.get("procedure", "direct" if "tau" in d else "sc")
-        d["_proc"] = proc
+        d["_proc"] = d.get("procedure", "direct" if "tau" in d else "sc")
         cells.append(d)
     return cells
 
 
-def _r_hat_with_err(cell: dict[str, Any]) -> tuple[float, float, float]:
-    a = cell["aggregates_at_K_max"]
-    ci = cell["bootstrap_R_hat_K_at_K_max"]
-    r = a["R_hat_K"]
-    return r, r - ci["ci_low"], ci["ci_high"] - r
+def _present(order: list[tuple[str, str]], keys: set[str]) -> list[tuple[str, str]]:
+    return [(k, lbl) for k, lbl in order if k in keys]
 
 
-def plot_sc_saturation(scope: str, cells: list[dict[str, Any]], figures_dir: Path) -> Path | None:
-    sc_cells = [c for c in cells if c["_proc"] == "sc"]
-    if not sc_cells:
-        print(f"  scope {scope!r}: no SC cells, skipping saturation figure")
-        return None
-
-    datasets = datasets_in_scope(scope, sc_cells)
-    models = sorted({c["model"] for c in sc_cells})
-
-    fig, axes = plt.subplots(
-        1, len(datasets),
-        figsize=(4.4 * len(datasets), 3.6),
-        sharey=False, squeeze=False,
-    )
-    axes = axes[0]
-
-    for j, ds in enumerate(datasets):
-        ax = axes[j]
-        for model in models:
-            rows = sorted(
-                (c for c in sc_cells if c["dataset"] == ds and c["model"] == model),
-                key=lambda c: c["sc_n"],
-            )
-            if not rows:
-                continue
-            ns = [c["sc_n"] for c in rows]
-            r_hats = [c["aggregates_at_K_max"]["R_hat_K"] for c in rows]
-            err_lows = [r - c["bootstrap_R_hat_K_at_K_max"]["ci_low"]
-                        for r, c in zip(r_hats, rows)]
-            err_highs = [c["bootstrap_R_hat_K_at_K_max"]["ci_high"] - r
-                         for r, c in zip(r_hats, rows)]
-            ax.errorbar(
-                ns, r_hats, yerr=[err_lows, err_highs],
-                marker="o", lw=1.6, capsize=3,
-                color=_MODEL_COLORS.get(model, "black"),
-                label=_MODEL_LABELS.get(model, model),
-            )
-
-        ax.set_xscale("log", base=2)
-        ax.set_xlabel(r"$n$  (samples per SC draw)")
-        if j == 0:
-            ax.set_ylabel(r"$\hat{\mathcal{R}}_K(\pi_{\mathrm{SC}(n)})$")
-        # Match the spec: M is 1319 for gsm8k, 1000 for math.
-        sample_M = next(
-            (c["M"] for c in sc_cells if c["dataset"] == ds), None,
-        )
-        ax.set_title(f"{ds}  (M={sample_M}, K=64)", fontsize=10)
-        ax.grid(True, alpha=0.3)
-        ax.set_ylim(bottom=0)
-        if j == len(datasets) - 1:
-            ax.legend(fontsize=8, loc="best")
-
-    fig.suptitle(
-        f"H3 ({scope}) — SC procedure saturation: "
-        r"$\hat{\mathcal{R}}_K(\pi_{\mathrm{SC}(n)})$ vs $n$  "
-        r"(K=64 bootstrap draws, seed=0)",
-        fontsize=11,
-    )
-    fig.tight_layout()
-    fig.subplots_adjust(top=0.88)
-
-    pdf_path = figures_dir / f"h3_sc_saturation_{scope}.pdf"
-    png_path = figures_dir / f"h3_sc_saturation_{scope}.png"
-    fig.savefig(pdf_path, bbox_inches="tight")
-    fig.savefig(png_path, bbox_inches="tight", dpi=120)
-    plt.close(fig)
-    return pdf_path
-
-
-def plot_procedures(scope: str, cells: list[dict[str, Any]], figures_dir: Path) -> Path | None:
-    """Bar chart per (model, dataset): R_hat across all procedures."""
-    if not cells:
-        print(f"  scope {scope!r}: no cells, skipping procedures figure")
-        return None
-    models = sorted({c["model"] for c in cells})
-    datasets = datasets_in_scope(scope, cells)
-
+def _grid(models, datasets):
     fig, axes = plt.subplots(
         len(models), len(datasets),
-        figsize=(3.7 * len(datasets), 2.6 * len(models)),
-        squeeze=False, sharey=True,
+        figsize=(3.6 * len(datasets), 2.6 * len(models)),
+        sharex=True, sharey=True, squeeze=False,
     )
+    return fig, axes
 
-    # Procedure ordering and labels.
-    proc_order: list[tuple[str, str]] = [
-        ("direct", "0.0"), ("direct", "0.7"), ("direct", "1.0"),
-        ("sc", "2"), ("sc", "4"), ("sc", "8"), ("sc", "16"), ("sc", "32"),
-    ]
-    proc_labels = [
-        r"$\tau$=0",  r"$\tau$=0.7",  r"$\tau$=1",
-        "SC n=2",  "SC n=4",  "SC n=8",  "SC n=16",  "SC n=32",
-    ]
-    proc_colors = [
-        "#fc8d62", "#fdb863", "#fee090",
-        "#91bfdb", "#74add1", "#4575b4", "#313695", "#08306b",
-    ]
 
-    for i, model in enumerate(models):
-        for j, ds in enumerate(datasets):
+def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path | None:
+    sc = [c for c in cells if c["_proc"] == "sc"]
+    if not sc:
+        print("  no SC cells, skipping saturation figure")
+        return None
+    datasets = _present(_DATASET_ORDER, {c["dataset"] for c in sc})
+    models = _present(_MODEL_ORDER, {c["model"] for c in sc})
+
+    # Evenly-spaced categorical x-axis labelled with the actual n values
+    # (2, 4, 8, ...) instead of a log 2^k axis.
+    all_ns = sorted({c["sc_n"] for c in sc})
+    pos = {n: i for i, n in enumerate(all_ns)}
+
+    fig, axes = _grid(models, datasets)
+    for i, (m, m_lbl) in enumerate(models):
+        for j, (ds, ds_lbl) in enumerate(datasets):
             ax = axes[i][j]
-            for k, (kind, val) in enumerate(proc_order):
-                if kind == "direct":
-                    rows = [c for c in cells
-                            if c["model"] == model and c["dataset"] == ds
-                            and c["_proc"] == "direct"
-                            and abs(c["tau"] - float(val)) < 1e-9]
-                else:
-                    rows = [c for c in cells
-                            if c["model"] == model and c["dataset"] == ds
-                            and c["_proc"] == "sc"
-                            and c["sc_n"] == int(val)]
-                if not rows:
-                    continue
-                r, lo, hi = _r_hat_with_err(rows[0])
-                ax.bar(
-                    k, r, color=proc_colors[k],
-                    yerr=[[lo], [hi]], capsize=3, ecolor="black",
-                )
-
-            ax.set_xticks(range(len(proc_order)))
-            ax.set_xticklabels(proc_labels, rotation=45, ha="right", fontsize=7)
-            ax.grid(True, axis="y", alpha=0.3)
-            ax.set_ylim(bottom=0)
+            rows = sorted(
+                (c for c in sc if c["dataset"] == ds and c["model"] == m),
+                key=lambda c: c["sc_n"],
+            )
+            legend_panel = (i == 0 and j == len(datasets) - 1)
+            if rows:
+                xs = [pos[c["sc_n"]] for c in rows]
+                for field, label, color, marker, ls in _METRIC_STYLE:
+                    ys = [c["aggregates_at_K_max"][field] for c in rows]
+                    kw: dict[str, Any] = {}
+                    if field == "R_hat_K":
+                        kw["yerr"] = [
+                            [y - c["bootstrap_R_hat_K_at_K_max"]["ci_low"] for y, c in zip(ys, rows)],
+                            [c["bootstrap_R_hat_K_at_K_max"]["ci_high"] - y for y, c in zip(ys, rows)],
+                        ]
+                        kw["capsize"] = 2.5
+                    ax.errorbar(xs, ys, marker=marker, lw=1.7, ls=ls, color=color,
+                                label=(label if legend_panel else None), **kw)
+            ax.set_xticks(range(len(all_ns)))
+            ax.set_xticklabels([str(n) for n in all_ns])
+            ax.grid(True, alpha=0.3)
+            ax.set_ylim(0, 1.0)
+            if i == len(models) - 1:
+                ax.set_xlabel(r"$n$")
             if j == 0:
-                ax.set_ylabel(
-                    _MODEL_LABELS.get(model, model) + "\n" + r"$\hat{\mathcal{R}}_K$",
-                    fontsize=9,
-                )
+                ax.set_ylabel(m_lbl + "\nutility", fontsize=16)
             if i == 0:
-                ax.set_title(ds, fontsize=10)
+                ax.set_title(ds_lbl, fontsize=15)
+            if legend_panel:
+                ax.legend(fontsize=12, loc="upper right")
 
-    fig.suptitle(
-        f"H3 ({scope}) — "
-        r"$\hat{\mathcal{R}}_K$ across inference procedures  (K=64, seed=0)",
-        fontsize=11,
-    )
     fig.tight_layout()
-    fig.subplots_adjust(top=0.92)
+    return _save(fig, figures_dir, "h3_sc_saturation")
 
-    pdf_path = figures_dir / f"h3_procedures_{scope}.pdf"
-    png_path = figures_dir / f"h3_procedures_{scope}.png"
-    fig.savefig(pdf_path, bbox_inches="tight")
-    fig.savefig(png_path, bbox_inches="tight", dpi=120)
+
+def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | None:
+    direct = [c for c in cells if c["_proc"] == "direct" and "tau" in c]
+    if not direct:
+        print("  no direct cells, skipping temperature figure")
+        return None
+    datasets = _present(_DATASET_ORDER, {c["dataset"] for c in direct})
+    models = _present(_MODEL_ORDER, {c["model"] for c in direct})
+
+    # index (model, dataset, tau) -> cell
+    idx: dict[tuple, dict] = {}
+    for c in direct:
+        idx[(c["model"], c["dataset"], round(float(c["tau"]), 3))] = c
+
+    # Rows = datasets, columns = models (tall, narrow figure).
+    fig, axes = plt.subplots(
+        len(datasets), len(models),
+        figsize=(2.7 * len(models), 1.9 * len(datasets)),
+        sharex=True, sharey=True, squeeze=False,
+    )
+    for i, (ds, ds_lbl) in enumerate(datasets):
+        for j, (m, m_lbl) in enumerate(models):
+            ax = axes[i][j]
+            legend_panel = (i == 0 and j == len(models) - 1)
+            present_taus = [t for t in _TAUS if (m, ds, t) in idx]
+            if present_taus:
+                for field, label, color, marker, ls in _METRIC_STYLE:
+                    ys = [idx[(m, ds, t)]["aggregates_at_K_max"][field] for t in present_taus]
+                    kw: dict[str, Any] = {}
+                    if field == "R_hat_K":
+                        kw["yerr"] = [
+                            [idx[(m, ds, t)]["aggregates_at_K_max"][field]
+                             - idx[(m, ds, t)]["bootstrap_R_hat_K_at_K_max"]["ci_low"]
+                             for t in present_taus],
+                            [idx[(m, ds, t)]["bootstrap_R_hat_K_at_K_max"]["ci_high"]
+                             - idx[(m, ds, t)]["aggregates_at_K_max"][field]
+                             for t in present_taus],
+                        ]
+                        kw["capsize"] = 2.5
+                    ax.errorbar(present_taus, ys, marker=marker, lw=1.7, ls=ls,
+                                color=color, label=(label if legend_panel else None), **kw)
+            ax.grid(True, alpha=0.3)
+            ax.set_ylim(0, 1.0)
+            ax.set_xticks(_TAUS)
+            if i == len(datasets) - 1:
+                ax.set_xlabel(r"$\tau$")
+            if j == 0:
+                ax.set_ylabel(ds_lbl + "\nutility", fontsize=16)
+            if i == 0:
+                ax.set_title(m_lbl, fontsize=15)
+            if legend_panel:
+                ax.legend(fontsize=12, loc="upper right")
+
+    fig.tight_layout()
+    return _save(fig, figures_dir, "h3_temperature")
+
+
+def _save(fig, figures_dir: Path, stem: str) -> Path:
+    pdf = figures_dir / f"{stem}.pdf"
+    fig.savefig(pdf, bbox_inches="tight")
+    fig.savefig(figures_dir / f"{stem}.png", bbox_inches="tight", dpi=120)
     plt.close(fig)
-    return pdf_path
+    return pdf
 
 
 def main() -> None:
@@ -224,19 +219,10 @@ def main() -> None:
         raise SystemExit(f"No H3 results JSONs found in {h3_dir}")
     print(f"Loaded {len(cells)} H3 cells")
 
-    by_scope = split_cells_by_scope(cells)
-    for scope in SCOPE_DATASETS:
-        scope_cells = by_scope[scope]
-        if not scope_cells:
-            print(f"  scope {scope!r}: no cells")
-            continue
-        print(f"  scope {scope!r}: {len(scope_cells)} cells")
-        sat = plot_sc_saturation(scope, scope_cells, figures_dir)
-        if sat:
-            print(f"  Wrote {sat}")
-        proc = plot_procedures(scope, scope_cells, figures_dir)
-        if proc:
-            print(f"  Wrote {proc}")
+    for fn in (plot_sc_saturation, plot_temperature):
+        out = fn(cells, figures_dir)
+        if out:
+            print(f"  Wrote {out}")
 
 
 if __name__ == "__main__":

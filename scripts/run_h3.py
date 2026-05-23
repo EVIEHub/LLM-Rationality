@@ -170,7 +170,7 @@ def main() -> None:
     parser.add_argument("--model", required=True)
     parser.add_argument(
         "--dataset", required=True,
-        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback"],
+        choices=["gsm8k", "math", "humaneval", "matharena", "livecodebench", "ultrafeedback", "alpaca_eval"],
     )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--K", type=int, default=64,
@@ -193,6 +193,16 @@ def main() -> None:
     parser.add_argument(
         "--api-concurrency", type=int, default=10,
         help="Max in-flight requests for backend:api models (proxy rate-limit ceiling).",
+    )
+    parser.add_argument(
+        "--judge-local-model", default=None,
+        help="models.yaml alias of a fixed local vLLM judge for preference "
+             "datasets, overriding strict-self (e.g. qwen2.5-14b-instruct for "
+             "an independent judge-robustness re-run).",
+    )
+    parser.add_argument(
+        "--judge-L", type=int, default=None,
+        help="Override judge calls per pair (default: ds_cfg.judge_L, or 5).",
     )
     args = parser.parse_args()
 
@@ -252,6 +262,10 @@ def main() -> None:
                 part = part.select(range(min(n, len(part))))
             parts.append(part)
         raw_ds = concatenate_datasets(parts)
+    elif ds_cfg.get("hf_data_file"):
+        from huggingface_hub import hf_hub_download
+        fp = hf_hub_download(ds_cfg["hf_id"], ds_cfg["hf_data_file"], repo_type="dataset")
+        raw_ds = load_dataset("json", data_files=fp, split="train")
     else:
         ds_kwargs: dict[str, Any] = {"path": ds_cfg["hf_id"], "split": ds_cfg["split"]}
         if ds_cfg.get("hf_config"):
@@ -382,19 +396,28 @@ def main() -> None:
                     "backend:api models."
                 )
             from src.verification.self_judge import score_matrix
-            L_judge = int(ds_cfg.get("judge_L", 5))
+            L_judge = int(args.judge_L or ds_cfg.get("judge_L", 5))
+            # Strict-self by default; a fixed independent local judge if
+            # requested (re-judges cached candidates without self-preference).
+            if args.judge_local_model:
+                judge_hf_id = models_cfg[args.judge_local_model]["hf_id"]
+                judge_tok = AutoTokenizer.from_pretrained(judge_hf_id)
+                log.info("Fixed local judge: %s (%s)", args.judge_local_model, judge_hf_id)
+            else:
+                judge_hf_id = model_cfg["hf_id"]
+                judge_tok = tokenizer
             log.info(
                 "Preference mode: %d * %d * L=%d judge calls via vLLM",
                 len(samples_per_prompt), K_effective, L_judge,
             )
             with VllmRunner(
-                model_cfg["hf_id"],
+                judge_hf_id,
                 gpu_memory_utilization=args.gpu_mem,
                 enforce_eager=True,
             ) as judge_runner:
                 outcome = score_matrix(
                     judge_runner=judge_runner,
-                    judge_tokenizer=tokenizer,
+                    judge_tokenizer=judge_tok,
                     raw_prompts=raw_user_prompts,
                     candidates=samples_per_prompt,
                     references=ground_truths,
@@ -494,7 +517,12 @@ def main() -> None:
         })
 
     # --- write per-cell result ------------------------------------------
-    out_path = h3_dir / f"{args.model}_{args.dataset}_{proc_tag}_seed{args.seed}.json"
+    # Tag with a fixed local judge (preference) so it doesn't overwrite the
+    # strict-self result — both are needed for the judge-robustness comparison.
+    judge_tag = ""
+    if ds_cfg.get("verifier") == "self_judge" and args.judge_local_model:
+        judge_tag = f"_judge-{args.judge_local_model}"
+    out_path = h3_dir / f"{args.model}_{args.dataset}_{proc_tag}{judge_tag}_seed{args.seed}.json"
     payload: dict[str, Any] = {
         "experiment": experiment,
         "model": args.model,

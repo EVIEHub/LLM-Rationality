@@ -86,9 +86,11 @@ def main() -> None:
     parser.add_argument("--model", default="tulu3-8b-rlvr",
                         help="H4 default is Tulu-3-RLVR; rebuild cache if changed.")
     parser.add_argument(
-        "--dataset", required=True, choices=["gsm8k", "math", "matharena"],
-        help="HumanEval / LiveCodeBench excluded — budget-forced 'Final answer:' "
-             "procedure is meaningful only on math-style benchmarks.",
+        "--dataset", required=True, choices=["gsm8k", "math", "matharena", "bbh"],
+        help="HumanEval / LiveCodeBench excluded — budget forcing needs a "
+             "short verifiable answer. Math sets (gsm8k/math/matharena) plus "
+             "bbh (BIG-Bench Hard: diverse non-math reasoning with short "
+             "MC/boolean/count answers) qualify.",
     )
     parser.add_argument("--L", type=int, required=True,
                         help="max_reasoning_length (0, 64, 128, 256, 512, 1024, 2048).")
