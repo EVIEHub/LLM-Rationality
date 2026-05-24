@@ -16,8 +16,10 @@ import argparse
 from pathlib import Path
 
 from src.plotting.appendix import (
-    build_B4_gpu_hours, build_C1_saturation, build_C3_M_convergence,
-    build_C4_epsilon, build_E2_per_difficulty, build_G_candidates,
+    build_B4_gpu_hours, build_C1_saturation, build_C2_L_sensitivity,
+    build_C3_M_convergence, build_C4_epsilon, build_D1_math_failures,
+    build_D2_position_bias, build_D3_gsm8k_patterns,
+    build_E2_per_difficulty, build_G_candidates,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -41,30 +43,13 @@ matrix. To produce this:
 
 Then a small post-processor over that JSONL produces the C.2 table.
 
-## D.1 — MATH verifier failure-mode rates
-Needs the **failure-cause** for each `U=0` verification (one of
-{no-boxed, empty-boxed, parse-timeout, verify-timeout, internal-exception,
-incorrect}). The current verifier returns only the float utility. To
-produce this:
-
-  1. Instrument `src.verification.math.verify` to optionally return a
-     reason string alongside `0.0` (no behavioural change at K=64).
-  2. Re-run the verification pass over the cached samples for the three
-     headline (model, MATH) cells; aggregate the reasons.
-  3. The re-verifier here is identical to the one we used to fix the 72B
-     MATH cell (see `_local_backups/rerun_72b_math.py`); just add reason
-     capture.
-
-## D.2 — Position bias / inter-rater agreement (self-judge cells)
-Needs the per-(prompt, candidate, l) raw verdicts and the
-`a_is_candidate` flag, currently dropped after aggregation. Same fix as
-C.2: re-run with audit logging, then post-process.
-
-## D.3 — GSM8K extractor pattern-firing rates
-Needs to record which of the four GSM8K extractor patterns matched each
-generation. Smallest patch: add an optional `with_reason=True` return mode
-to `src.verification.gsm8k.verify`, then re-extract on the cached samples
-for the three headline (model, GSM8K) cells.
+## C.2 / D.2 — Self-judge audit-log re-aggregation
+Both sections now auto-fill IFF the self-judge audit log at
+`outputs/logs/verifier/ultrafeedback_log.jsonl` exists with the
+`a_is_candidate` flag baked in (Phase-2 patch to
+`scripts/run_h1.py` and `src/verification/self_judge.py`,
+2026-05-24). If the log is missing or pre-Phase-2, the builders emit
+a one-line `% NOTE` stub explaining what's needed.
 
 ## G — Failure-case traces
 Qualitative. The pipeline outputs `G_candidates.tex` listing the
@@ -94,8 +79,12 @@ def main() -> None:
     sections = [
         ("B4_gpu_hours.tex",    build_B4_gpu_hours(results_dir, args.seed)),
         ("C1_saturation.tex",   build_C1_saturation(results_dir, args.seed)),
+        ("C2_L_sensitivity.tex", build_C2_L_sensitivity(results_dir, args.seed)),
         ("C3_M_convergence.tex", build_C3_M_convergence(results_dir, args.seed)),
         ("C4_epsilon.tex",      build_C4_epsilon(results_dir, args.seed)),
+        ("D1_math_failures.tex", build_D1_math_failures(results_dir, args.seed)),
+        ("D2_position_bias.tex", build_D2_position_bias(results_dir, args.seed)),
+        ("D3_gsm8k_patterns.tex", build_D3_gsm8k_patterns(results_dir, args.seed)),
         ("E2_per_difficulty.tex", build_E2_per_difficulty(results_dir, args.seed)),
         ("G_candidates.tex",    build_G_candidates(results_dir, args.seed)),
     ]

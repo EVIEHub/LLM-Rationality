@@ -175,7 +175,8 @@ class TestGuards:
 
 class TestRetry:
     def test_retries_then_succeeds(self, monkeypatch) -> None:
-        # First call 429, second 200.
+        # First call 429 (transient upstream rate limit -- retryable per the
+        # body-substring policy in `_is_retryable_429`); second 200.
         import src.sampling.api_runner as mod
         monkeypatch.setattr(mod.asyncio, "sleep", _instant_sleep)
         state = {"n": 0}
@@ -183,13 +184,32 @@ class TestRetry:
         def responder(body, idx):
             state["n"] += 1
             if state["n"] == 1:
-                return _FakeResponse(429, text="rate limited")
+                return _FakeResponse(429, text="Upstream rate_limit_error")
             return _FakeResponse(200, content="ok")
 
         runner = _runner_with(responder)
         out = runner.sample(["q"], K=1, seed=0)
         assert out == [["ok"]]
         assert state["n"] == 2
+
+    def test_quota_exhausted_429_does_not_retry(self, monkeypatch) -> None:
+        # The load-bearing safety policy in `_is_retryable_429` is that a
+        # 429 whose body indicates QUOTA_EXHAUSTED on a quota-capped proxy
+        # must abort immediately rather than retry — otherwise we flood
+        # the proxy with rejected requests and trip its anti-abuse,
+        # disabling the key. One attempt only, then RuntimeError.
+        import src.sampling.api_runner as mod
+        monkeypatch.setattr(mod.asyncio, "sleep", _instant_sleep)
+        state = {"n": 0}
+
+        def responder(body, idx):
+            state["n"] += 1
+            return _FakeResponse(429, text="API_KEY_QUOTA_EXHAUSTED")
+
+        runner = _runner_with(responder)
+        with pytest.raises(RuntimeError, match="non-retryable"):
+            runner.sample(["q"], K=1, seed=0)
+        assert state["n"] == 1
 
     def test_non_retryable_raises(self, monkeypatch) -> None:
         import src.sampling.api_runner as mod

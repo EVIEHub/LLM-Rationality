@@ -2,16 +2,42 @@
 %  Appendix for "Rational gap of LLM reasoning"
 %
 %  Sections B-G as specified in the paper plan. This file is intended to
-%  be \input{} from the main paper after the bibliography. It assumes
-%  the main preamble already loads:
-%      amsmath, amssymb, booktabs, multirow, siunitx, hyperref, listings,
-%      xcolor, microtype, graphicx
-%  and defines the macros \UcircK, \UbarK, \RhatK that the main text uses
-%  for $U^\circ_K$, $\bar U_K$, $\hat{\mathcal R}_K$.
+%  be \input{} from the main paper after the bibliography, in a
+%  TWO-COLUMN layout. Wide tables use \begin{table*} to span both
+%  columns.
+%
+%  REQUIRED MAIN-PAPER PREAMBLE  (copy verbatim if any are missing — the
+%  appendix will not compile otherwise):
+%
+%      \usepackage[T1]{fontenc}            % typewriter \, {, } glyphs
+%      \usepackage{amsmath, amssymb}       % math
+%      \usepackage{booktabs}               % \toprule, \midrule, \bottomrule
+%      \usepackage{multirow}               % \multirow, \multicolumn
+%      \usepackage{array}                  % p{...} column type (tab:decoding)
+%      \usepackage{xcolor}                 % \textcolor (for \PH macro below)
+%      \usepackage{listings}               % lstlisting (prompt templates)
+%      \usepackage{microtype}              % typographic spacing
+%      \usepackage{graphicx}               % includegraphics
+%      \usepackage{hyperref}               % links + PDF bookmarks
+%      \usepackage[capitalize]{cleveref}   % \cref / \Cref  (LOAD AFTER hyperref)
+%
+%  The three core metrics appear inline as raw math
+%  ($U^\circ_K$, $\bar U_K$, $\hat{\mathcal R}_K$); no main-paper macros
+%  are required.
 %
 %  Numbers that must be read off the on-disk result JSONs are marked
 %  \PH{...}; everything else (procedures, prompts, version pins) is
 %  pulled verbatim from the code in this repository.
+%
+%  Sub-files \input{}-ed from this appendix:
+%      appendix_inputs/B4_gpu_hours.tex      -> tab:appendix_gpu_hours
+%      appendix_inputs/C1_saturation.tex     -> tab:appendix_saturation
+%      appendix_inputs/C3_M_convergence.tex  -> tab:appendix_M_convergence
+%      appendix_inputs/C4_epsilon.tex        -> Thm-1 epsilon prose
+%      appendix_inputs/E2_per_difficulty.tex -> tab:appendix_per_difficulty
+%      appendix_inputs/G_candidates.tex      -> spike-at-0 candidate list
+%  These must be present alongside this file (e.g. when copying the
+%  appendix tree into a paper submission, copy appendix_inputs/ too).
 % =====================================================================
 
 \newcommand{\PH}[1]{\textcolor{red!70!black}{\textbf{[#1]}}}
@@ -21,7 +47,7 @@
 \label{app:config}
 
 This appendix records every knob that affects the reported numbers, so
-that a re-implementer can reproduce $\UcircK$, $\UbarK$, and $\RhatK$
+that a re-implementer can reproduce $U^\circ_K$, $\bar U_K$, and $\hat{\mathcal R}_K$
 byte-for-byte at the cell level (subject to vLLM kernel non-determinism
 across hardware, which we quantify in \cref{app:calibration}).
 
@@ -38,18 +64,19 @@ collects the per-experiment values; all are pulled verbatim from
 \texttt{configs/experiments/h1.yaml}, the H2/H3/H4 cell runners, and
 \texttt{src/sampling/inference\_procedures.py}.
 
-\begin{table}[h]
+\begin{table*}[t]
 \centering
 \small
+\setlength{\tabcolsep}{4pt}
 \caption{Decoding hyperparameters. Values not listed (e.g.\ presence
 penalties, repetition penalties) are left at vLLM 0.6.3 defaults, i.e.\
 disabled.}
 \label{tab:decoding}
-\begin{tabular}{lcccccl}
+\begin{tabular}{lccccc p{6.6cm}}
 \toprule
 Experiment & $\tau$ & top-$p$ & top-$k$ & $K$ & max\_tokens & Notes \\
 \midrule
-H1 (all models, all datasets) & 1.0 & 1.0 & $-1$ & 64 & 1024 & UltraFeedback uses $K=32$, max\_tokens$=512$ \\
+H1 (all models, all datasets) & 1.0 & 1.0 & $-1$ & 64 & 1024 & UltraFeedback uses $K=32$, max\_tokens${}=512$ \\
 H2 (chat-mode stages)         & 1.0 & 1.0 & $-1$ & 64 & 1024 & Same cache key as H1 for the RLVR stage \\
 H2 (Tülu-3 base, few-shot)    & 1.0 & 1.0 & $-1$ & 64 & 1024 & Few-shot context prepended, see \cref{app:config:prompts} \\
 H3 direct, $\tau{=}0$         & 0.0 & 1.0 & $-1$ & 1  & 1024 & $K{=}1$ enforced; greedy with $K{>}1$ is refused \\
@@ -61,7 +88,7 @@ H4 budget-forced, stage 2     & 1.0 & 1.0 & $-1$ & 1  & 64 & One continuation pe
 Self-judge calls (H1/H2)      & 0.7 & 1.0 & $-1$ & 1  & 8  & $L=5$ verdicts per (prompt, candidate) \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \textbf{Stop tokens.}
 We deliberately do not configure stop tokens. The chat templates of the
@@ -74,13 +101,13 @@ For the Tülu-3 base model (few-shot mode in H2) we rely on
 budget-forced stage in H4 truncates by token count, not by a stop
 string; the second stage receives the user-defined prompt suffix
 \texttt{"\textbackslash n\textbackslash nFinal answer:"} and is itself
-capped by \texttt{answer\_max\_tokens$=64$}.
+capped by \texttt{answer\_max\_tokens}${}=64$.
 
 \textbf{Greedy refusal.}
 The sampler raises \texttt{ValueError} if greedy decoding
 ($\tau{=}0$) is requested with $K{>}1$, since all $K$ samples would
 be identical — see \texttt{vllm\_runner.py:100}. This forces H3's
-greedy cell to use $K{=}1$, for which $\RhatK = 0$ by construction.
+greedy cell to use $K{=}1$, for which $\hat{\mathcal R}_K = 0$ by construction.
 
 \subsection{Prompt templates}
 \label{app:config:prompts}
@@ -160,10 +187,11 @@ MATH 4-shot block (algebra-only, header lines only):
 
 Few-shot examples are concatenated with the test prompt as
 \texttt{examples\_text.rstrip() + "\textbackslash n\textbackslash n" + user\_template},
-matching \texttt{src/sampling/run\_h2.py:79--88}.
+matching \texttt{src/sampling/run\_h2.py}, lines 79--88.
 
 \paragraph{LLM-as-judge prompts (UltraFeedback).}
-Self-judge cells use a fixed schema (\texttt{src/verification/self\_judge.py:55--85}):
+Self-judge cells use a fixed schema
+(\texttt{src/verification/self\_judge.py}, lines 55--85):
 
 \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
 System: You are evaluating two responses to a user's question. Pick
@@ -208,9 +236,10 @@ All cells run inside a Python 3.11 conda environment created by
       \texttt{https://download.pytorch.org/whl/cu124}.
 \item \textbf{CUDA} 12.4 (matches the PyTorch wheel).
 \item \textbf{NVIDIA driver}: $\geq 550.54.x$. Recorded automatically by
-      \texttt{nvidia-smi --query-gpu=driver\_version} at the top of
-      every panel log. The exact driver of the host that produced our
-      tables was \PH{driver version, e.g.\ 550.90.07}.
+      \texttt{nvidia-smi} with
+      \texttt{--query-gpu=driver\_version} at the top of every panel
+      log. The exact driver of the host that produced our tables was
+      \PH{driver version, e.g.\ 550.90.07}.
 \item \textbf{transformers} \texttt{==4.45.2},
       \texttt{accelerate} (latest at install time),
       \texttt{huggingface\_hub} (latest at install time),
@@ -233,7 +262,7 @@ $\text{seed}, \text{prompt\_template\_version}, M, L_{\text{H4}})$, fingerprinte
 a 16-hex SHA-256 prefix. A cache file is immutable; the writer refuses
 to overwrite. This guarantees that, on a re-run, the H1 RLVR cell and
 the H2 RLVR cell read the same generations, so any difference in
-$\UcircK$ for those two cells reflects only verifier non-determinism
+$U^\circ_K$ for those two cells reflects only verifier non-determinism
 (\cref{app:calibration}).
 
 \subsection{GPU-hour breakdown}
@@ -256,7 +285,7 @@ sampler via \texttt{SamplingParams(seed=\ldots)}, (ii) the bootstrap
 RNG via \texttt{numpy.random.default\_rng(seed)}, (iii) the self-judge
 A/B-position assignment via the same RNG, and (iv) the SC bootstrap
 RNG\@. All headline cells use seed $0$. The per-cell uncertainty
-reported alongside every $\RhatK$ in the main text is the 95\%
+reported alongside every $\hat{\mathcal R}_K$ in the main text is the 95\%
 prompt-bootstrap CI (B$=$1000); we treat the prompt set as the
 dominant source of variance and do not run a cross-seed sweep.
 
@@ -264,32 +293,32 @@ dominant source of variance and do not run a cross-seed sweep.
 \section{Estimator calibration}
 \label{app:calibration}
 
-The empirical $\RhatK$ has three error sources that map onto the three
+The empirical $\hat{\mathcal R}_K$ has three error sources that map onto the three
 terms of Theorem~1: (i) truncation error in $K$ for the saturation
 curve; (ii) verifier-call variance for the stochastic self-judge
 setting (parameterised by $L$); and (iii) prompt sampling error for the
 final aggregate (parameterised by $M$). This appendix calibrates each
 empirically.
 
-\subsection{Saturation in $K$: full curve data}
+\subsection{Saturation in \texorpdfstring{$K$}{K}: full curve data}
 \label{app:calibration:K}
 
 The saturation curve at $K'\leq K_{\max}$ is computed by direct
 truncation of the cell's $(M, K_{\max})$ utility matrix to its first
 $K'$ columns, applying the paper formulas verbatim
-(\texttt{src/metrics/rational\_gap.py:109--160}):
+(\texttt{src/metrics/rational\_gap.py}, lines 109--160):
 \begin{align}
-\UcircK(K') &= \tfrac{1}{M}\sum_{i=1}^{M} \max_{k\in[K']} U(x_i, y_{i,k}), \\
-\UbarK(K')  &= \tfrac{1}{MK'} \sum_{i=1}^{M} \sum_{k=1}^{K'} U(x_i, y_{i,k}), \\
-\RhatK(K')  &= \UcircK(K') - \UbarK(K').
+U^\circ_K(K') &= \tfrac{1}{M}\sum_{i=1}^{M} \max_{k\in[K']} U(x_i, y_{i,k}), \\
+\bar U_K(K')  &= \tfrac{1}{MK'} \sum_{i=1}^{M} \sum_{k=1}^{K'} U(x_i, y_{i,k}), \\
+\hat{\mathcal R}_K(K')  &= U^\circ_K(K') - \bar U_K(K').
 \end{align}
 There is no binomial closed form, no expectation framing, and no
 implicit smoothing: the figure is a direct read-off of the cached
 utility matrix. The grid is
 $K' \in \{1, 2, 4, 8, 16, 32, 64\}$ (powers of two up to $K_{\max}$).
 
-\Cref{tab:sat-headline} reports the full numerical saturation table
-for the three headline H1 cells, including $\UcircK$ and $\UbarK$ at
+\Cref{tab:appendix_saturation} reports the full numerical saturation table
+for the three headline H1 cells, including $U^\circ_K$ and $\bar U_K$ at
 every grid point. The corresponding plot is Figure~1 in the main text;
 this table is the raw data behind it.
 
@@ -297,14 +326,14 @@ this table is the raw data behind it.
 
 \textbf{Interpretation.} The saturation curve is monotone non-decreasing
 in $K'$ by construction (taking the max over a larger set can only
-weakly increase it). The gap to the limit $\UcircK(\infty)$ is exactly
-the second term of Theorem~1, $|\UcircK(K_{\max}) - \UcircK(\infty)|$;
-\cref{tab:sat-headline} shows that for every headline cell the
+weakly increase it). The gap to the limit $U^\circ_K(\infty)$ is exactly
+the second term of Theorem~1, $|U^\circ_K(K_{\max}) - U^\circ_K(\infty)|$;
+\cref{tab:appendix_saturation} shows that for every headline cell the
 incremental gain from $K_{\max}/2$ to $K_{\max}$ is below \PH{$\delta$,
 e.g.\ 0.01}, which we take as the operational definition of
 ``saturated at $K_{\max}=64$''.
 
-\subsection{Verifier-call variance in $L$ (stochastic verifier)}
+\subsection{Verifier-call variance in \texorpdfstring{$L$}{L} (stochastic verifier)}
 \label{app:calibration:L}
 
 Under the deterministic-verifier setting (GSM8K, MATH algebra, MathArena,
@@ -323,10 +352,10 @@ without replacement; for $L'>5$ we resample with replacement from the
 five recorded verdicts (a bootstrap that approximates fresh i.i.d.\
 judge calls under the stationary judge distribution).
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \small
-\caption{Effect of $L$ on $\RhatK$ at $K{=}32$ for the H1 preference
+\caption{Effect of $L$ on $\hat{\mathcal R}_K$ at $K{=}32$ for the H1 preference
 cell (Tülu-3-RLVR on UltraFeedback, $M{=}1000$). Std is across $B{=}1000$
 bootstrap resamples of the $L'$-subsampled vote pattern with the
 prompt set held fixed. The reported $L{=}5$ row matches the headline
@@ -334,7 +363,7 @@ preference cell.}
 \label{tab:L-sensitivity}
 \begin{tabular}{cccc}
 \toprule
-$L'$ & $\RhatK$ at $K{=}32$ & std($\RhatK$) over verdict-bootstrap & Parse-failure rate \\
+$L'$ & $\hat{\mathcal R}_K$ at $K{=}32$ & std($\hat{\mathcal R}_K$) over verdict-bootstrap & Parse-failure rate \\
 \midrule
 1 & \PH{} & \PH{} & \PH{} \\
 3 & \PH{} & \PH{} & \PH{} \\
@@ -350,13 +379,13 @@ remaining $L'{=}5\to9$ improvement is below the prompt-bootstrap CI
 half-width on the same cell, so $L{=}5$ sits at the elbow and we use
 it as the operating point for all preference cells. The parse-failure
 rate is small (\PH{$<0.01$}) and the missed verdicts are mapped to
-tie (0.5), which is the conservative direction for $\RhatK$ (a tie
-inflates $\UbarK$ relative to $\UcircK$, biasing $\RhatK$ down).
+tie (0.5), which is the conservative direction for $\hat{\mathcal R}_K$ (a tie
+inflates $\bar U_K$ relative to $U^\circ_K$, biasing $\hat{\mathcal R}_K$ down).
 
-\subsection{Prompt-sampling error in $M$ (bootstrap CI convergence)}
+\subsection{Prompt-sampling error in \texorpdfstring{$M$}{M} (bootstrap CI convergence)}
 \label{app:calibration:M}
 
-The prompt-bootstrap CI on $\RhatK$ converges in $M$ at the rate
+The prompt-bootstrap CI on $\hat{\mathcal R}_K$ converges in $M$ at the rate
 $1/\sqrt{M}$ predicted by the third term of Theorem~1. We verify this
 on the GSM8K Tülu-3-RLVR cell ($M{=}1319$, $K{=}64$) by re-bootstrapping
 subsets of the per-prompt array
@@ -371,12 +400,12 @@ without replacement, with $B{=}1000$ bootstrap resamples at each $M'$.
 The three calibrations above estimate the three terms of Theorem~1
 on a per-cell basis:
 \begin{enumerate}
-\item Truncation in $K$: \cref{tab:sat-headline}, last-column gain
-      $\RhatK(K_{\max}) - \RhatK(K_{\max}/2)$ upper-bounds the
+\item Truncation in $K$: \cref{tab:appendix_saturation}, last-column gain
+      $\hat{\mathcal R}_K(K_{\max}) - \hat{\mathcal R}_K(K_{\max}/2)$ upper-bounds the
       $K$-truncation residual under monotonicity.
 \item Verifier-call variance in $L$: \cref{tab:L-sensitivity}, std
       column.
-\item Prompt-sampling variance in $M$: \cref{tab:M-sensitivity}, CI
+\item Prompt-sampling variance in $M$: \cref{tab:appendix_M_convergence}, CI
       half-width.
 \end{enumerate}
 On the headline GSM8K / Tülu-3-RLVR cell at $(M, K, L) = (1319, 64, 1)$
@@ -422,31 +451,68 @@ unmatched). We re-wrap both predicted and ground-truth expressions in
 LaTeX like \texttt{2\textbackslash sqrt\{3\}} to its leading integer
 \texttt{2}.
 
-Parse and verify timeouts are 5 s each; any timeout, parse error, or
+Parse and verify timeouts are 5\,s each; any timeout, parse error, or
 internal exception in \texttt{math\_verify} resolves to $U=0$ (the
-conservative fail-closed direction). \cref{tab:math-failures} lists
-the failure modes that map to $U=0$ even when the model's
-boxed expression would have been mathematically correct.
+conservative fail-closed direction). \cref{tab:math-failures}
+re-verifies every cached MATH generation for the three headline cells
+($M{=}1000$ prompts, $K{=}64$ samples, $64{,}000$ pairs per cell) using
+the instrumented verifier
+\texttt{src.verification.math.verify\_with\_reason}, and tags each
+$(x_i, y_{i,k})$ pair with its terminal state.
 
-\begin{table}[h]
+\begin{table*}[t]
 \centering
 \small
-\caption{MATH verifier failure modes that fail closed ($U{=}0$).
-Failure rates are from the verifier audit log on the headline
-Tülu-3-RLVR / MATH algebra cell.}
+\setlength{\tabcolsep}{4pt}
+\caption{MATH verifier failure-mode rates on the three headline cells,
+percentage of $(x_i, y_{i,k})$ pairs. \texttt{correct} and
+\texttt{incorrect} are the two semantic outcomes; \texttt{no
+\textbackslash boxed} and \texttt{empty GT} are extraction failures
+(failed before \texttt{math-verify} was called); \texttt{parse error},
+\texttt{parse empty}, and \texttt{verify exception} are failures of the
+\texttt{math-verify} library itself. All five non-semantic columns
+resolve to $U{=}0$ (fail-closed).}
 \label{tab:math-failures}
-\begin{tabular}{lll}
+\begin{tabular}{l ccccccc r}
 \toprule
-Failure mode & Source & Rate (per generation) \\
+Model & \shortstack[c]{no \\ \texttt{\textbackslash boxed\{\}}} & \shortstack[c]{empty \\ GT} & \shortstack[c]{parse \\ error} & \shortstack[c]{parse \\ empty} & \shortstack[c]{verify \\ exception} & incorrect & correct & $M{\cdot}K$ \\
 \midrule
-No \texttt{\textbackslash boxed\{\ldots\}} in output      & extractor       & \PH{} \\
-Empty \texttt{\textbackslash boxed\{\}}                   & extractor       & \PH{} \\
-\texttt{math\_verify.parse} timeout (5 s)                 & math-verify     & \PH{} \\
-\texttt{math\_verify.verify} timeout (5 s)                & math-verify     & \PH{} \\
-\texttt{math\_verify} internal exception                  & math-verify     & \PH{} \\
+Tülu-3-8B-RLVR        &  4.9 & \textemdash & \textemdash & $<$0.1 & \textemdash & 29.3 & 65.8 & 64000 \\
+Qwen2.5-7B-Instruct   &  2.6 & \textemdash & \textemdash & $<$0.1 & \textemdash &  7.7 & 89.8 & 64000 \\
+Llama-3.1-8B-Instruct & 27.7 & \textemdash & \textemdash & $<$0.1 & \textemdash & 25.2 & 47.0 & 64000 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
+
+\paragraph{What the table says.}
+The verifier's failure budget is overwhelmingly dominated by one mode:
+the model never wrote a \texttt{\textbackslash boxed\{\ldots\}} commit
+at all. Llama-3.1-8B-Instruct is the most affected at $27.7\%$ of
+generations; Tülu-3-RLVR (instruction-tuned and RLVR'd to follow the
+boxed-answer template) drops to $4.9\%$; Qwen2.5-7B (which natively
+uses the template) is at $2.6\%$. The two \texttt{math-verify}-internal
+failure modes that could in principle mask a correct answer — parser
+exceptions and verifier exceptions — fire essentially never
+($\leq 0.05\%$ combined across all three cells; the entire column is
+absorbed by \texttt{parse empty}, which means the parser ran cleanly
+and returned an empty expression list, typically on a non-mathematical
+boxed value like \texttt{\textbackslash boxed\{?\}} or
+\texttt{\textbackslash boxed\{\}}). The \emph{empty GT} column is a
+defensive guard against a malformed ground truth and does not fire on
+the algebra split.
+
+\paragraph{Implication for the headline numbers.}
+The fail-closed convention is therefore costing us at most a few tenths
+of a percent of $U$ on these cells — the dominant cost is upstream
+(the model didn't follow the answer format), not in the SymPy
+back-end. In particular, the Llama-3.1-8B MATH $\bar U_K$ figure
+underestimates the model's mathematical ability by roughly the size of
+its $27.7\%$ no-\texttt{\textbackslash boxed} rate; the rational
+expected utility $U^\circ_K$ is unaffected at $K{=}64$ because a single
+correctly-formatted sample lifts the per-prompt indicator to $1$. This
+asymmetric impact on $\bar U_K$ versus $U^\circ_K$ is itself part of
+what $\hat{\mathcal R}_K$ measures — it shows up as inflated $\hat{\mathcal R}_K$
+on Llama / MATH, exactly as the main-text table reports.
 
 \paragraph{HumanEval.}
 \texttt{src/verification/humaneval.py} concatenates the model's code
@@ -497,8 +563,8 @@ equivalence, so the fallback can only reduce $U$, never inflate it.
 \subsection{LLM-as-judge evaluation (UltraFeedback)}
 
 \paragraph{Judge identity.}
-Per the methodology memo and \texttt{scripts/run\_h1.py:326--367} /
-\texttt{scripts/run\_h2.py:321--367}:
+Per the methodology memo and \texttt{scripts/run\_h1.py}
+(lines 326--367) / \texttt{scripts/run\_h2.py} (lines 321--367):
 \begin{itemize}
 \item \textbf{H1 preference (strict-self):} the judge for each
       (model, prompt, candidate) triple is \emph{the same model} that
@@ -533,13 +599,14 @@ For each of the $L$ judge calls, the position of the candidate
 (A or B) is decided by a fresh coin flip seeded deterministically from
 \texttt{(seed, i, k, l)}, so the assignment is fully reproducible from
 the cell seed alone (see
-\texttt{src/verification/self\_judge.py:190--194}). \cref{tab:position-bias}
+\texttt{src/verification/self\_judge.py}, lines 190--194).
+\cref{tab:position-bias}
 quantifies the residual position bias: the fraction of the $L=5$
 verdicts that selected position A, marginalised across all
 (prompt, candidate) pairs. A judge with no position bias would give
 $\approx 0.5$.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \small
 \caption{Residual position bias for the three H1 self-judges. ``A-pick
@@ -568,7 +635,7 @@ five votes as five raters), which is what the recorded
 \texttt{raw\_verdicts} field of the audit log enables. The headline
 agreement numbers are in \cref{tab:irr}.
 
-\begin{table}[h]
+\begin{table}[htbp]
 \centering
 \small
 \caption{Per-judge inter-rater agreement across the $L{=}5$ i.i.d.\
@@ -591,52 +658,92 @@ Llama-3.1-8B-Instruct         & \PH{} & \PH{} \\
 \subsection{Answer-extraction failure cases}
 
 \paragraph{GSM8K.}
-The fallback to ``last bare number'' is the dominant failure mode —
-when the model never writes \texttt{\#\#\#\#}, \texttt{\textbackslash boxed},
-or the phrase ``the answer is'', the verifier picks up whatever number
-appears latest in the text. The audit log records the unparseable
-generations (those for which the entire chain returns \texttt{None}),
-distinguishing format failure from arithmetic failure. \cref{tab:extract-fail}
-shows the per-pattern hit rate and the residual ``no number
-anywhere'' rate.
+The four-pattern fallback chain in
+\texttt{src.verification.gsm8k.extract\_answer} is applied in priority
+order: only the first pattern that returns a parseable number fires per
+generation, and ``last bare number'' is reached only when
+\texttt{\#\#\#\#}, \texttt{\textbackslash boxed}, and ``the answer is''
+all fail. Re-extracting every cached GSM8K generation for the three
+headline cells with the instrumented
+\texttt{extract\_answer\_with\_pattern} returns, for each
+$(x_i, y_{i,k})$ pair, both which pattern fired and whether the
+extracted number was correct. \cref{tab:extract-fail} reports the
+firing rate (\emph{fires}) and the conditional correctness given the
+pattern (\emph{acc.}), across $M\cdot K = 1319 \cdot 64 = 84{,}416$
+pairs per cell. A high \emph{fires} on \texttt{bare} \emph{combined
+with} a low \emph{acc.}\ would indicate the verifier is leaning on a
+noisy fallback; in practice it does not.
 
-\begin{table}[h]
+\begin{table*}[t]
 \centering
 \small
-\caption{Per-pattern hit rate of the GSM8K extractor on the headline
-Tülu-3-RLVR cell. Rows are mutually exclusive — only the first matching
-pattern fires per generation. The last row counts generations that
-emit no parseable numeric token at all (these are scored $U=0$).}
+\setlength{\tabcolsep}{4pt}
+\caption{Per-pattern firing and conditional-correctness rates of the
+GSM8K extractor on the three headline cells. Rows are mutually
+exclusive within each cell — only the first matching pattern fires per
+generation. \emph{fires} sums to $100\%$ across the five columns;
+\emph{acc.}\ is $P(U{=}1 \mid \text{pattern})$. The \texttt{no number
+parsed} column is the residual: generations emitting no parseable
+numeric token anywhere (these score $U{=}0$ by construction, so the
+\emph{acc.}\ entry is undefined).}
 \label{tab:extract-fail}
-\begin{tabular}{lr}
+\begin{tabular}{l cc cc cc cc cc r}
 \toprule
-Pattern that fired & Share of generations \\
+\multirow{2}{*}{Model} & \multicolumn{2}{c}{\texttt{\#\#\#\# $N$}} & \multicolumn{2}{c}{\texttt{\textbackslash boxed\{N\}}} & \multicolumn{2}{c}{``the answer is $N$''} & \multicolumn{2}{c}{\shortstack[c]{last bare \\ number}} & \multicolumn{2}{c}{\shortstack[c]{no number \\ parsed}} & \multirow{2}{*}{$M{\cdot}K$} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9} \cmidrule(lr){10-11}
+ & fires & acc. & fires & acc. & fires & acc. & fires & acc. & fires & acc. & \\
 \midrule
-\texttt{\#\#\#\# N} (canonical)      & \PH{} \\
-\texttt{\textbackslash boxed\{N\}}   & \PH{} \\
-\texttt{"the answer is N"}           & \PH{} \\
-last bare number                     & \PH{} \\
-unparseable (no number)              & \PH{} \\
+Tülu-3-8B-RLVR        & 99.9 & 86.2 & $<$0.1 & 62.5 & \textemdash & \textemdash & $<$0.1 & 25.0 & \textemdash & \textemdash & 84416 \\
+Qwen2.5-7B-Instruct   & 84.9 & 90.6 & 14.7   & 90.9 & \textemdash & \textemdash & 0.4   & 72.1 & \textemdash & \textemdash & 84416 \\
+Llama-3.1-8B-Instruct &  1.6 & 74.9 & $<$0.1 & 78.3 & 22.0        & 83.4        & 76.3  & 76.5 & $<$0.1      & \textemdash & 84416 \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
+
+\paragraph{What the table says.}
+The three models populate three distinct rows of the priority chain.
+Tülu-3-RLVR sticks to \texttt{\#\#\#\#} on $99.9\%$ of generations —
+the RLVR fine-tuning has effectively trained the canonical format into
+the policy. Qwen2.5-7B splits between \texttt{\#\#\#\#} ($84.9\%$) and
+\texttt{\textbackslash boxed} ($14.7\%$); accuracy is essentially
+identical across the two patterns ($90.6$ vs $90.9$), confirming the
+extractor is format-agnostic. Llama-3.1-8B reaches \texttt{\#\#\#\#}
+only $1.6\%$ of the time, falls through ``the answer is'' for $22\%$
+of generations, and uses the bare-number fallback for $76.3\%$. The
+critical diagnostic — does the bare fallback inflate or deflate
+correctness? — answers itself: on Llama, the four pattern accuracies
+$(74.9, 78.3, 83.4, 76.5)$ are within a $9$-point band, so the
+extractor's choice of pattern is not introducing a systematic bias.
+The fallback chain is doing what it should: extracting the number, not
+inventing it.
+
+\paragraph{Residual unparseable rate.}
+Across all three cells the \texttt{no number parsed} column is at most
+$<0.1\%$ (Llama; absent for the other two). The four-pattern chain is
+therefore a near-perfect cover of the number-emission distribution;
+the GSM8K verifier's $U{=}0$ count is dominated by \emph{wrong
+numbers}, not \emph{missing numbers}.
 
 \paragraph{MATH and MathArena.}
-Failure modes were already broken down in \cref{tab:math-failures}.
-The dominant mode is ``no \texttt{\textbackslash boxed\{\ldots\}} in
-output'' (typically a verbose reasoning trace that elides the boxed
-commit); the SymPy timeouts are rare ($<1\%$) but skewed toward the
-hardest problems.
+Failure modes were broken down in \cref{tab:math-failures}. The
+dominant mode is the upstream no-\texttt{\textbackslash boxed} rate
+(model never committed); the SymPy parser and verifier paths
+themselves are essentially never the cause of a $U{=}0$
+($\leq 0.05\%$). MathArena uses the same extractor and the same
+\texttt{math\_verify} call, plus a whitespace-insensitive
+string-equality fallback (described in \cref{app:evaluator}); the
+fallback is conservative (strict equality $\subseteq$ symbolic
+equivalence) so it can only lower $U$, never raise it.
 
 % =====================================================================
 \section{Per-dataset and per-difficulty breakdown}
 \label{app:per-dataset}
 
-The main-text Table reports $\RhatK$ aggregated across (model, dataset).
+The main-text Table reports $\hat{\mathcal R}_K$ aggregated across (model, dataset).
 This section breaks each headline cell down by problem difficulty
 within the dataset, so the reader can verify that the rational gap is
 not driven by a single difficulty stratum (in particular, not by the
-easiest tier where $\UcircK$ saturates trivially).
+easiest tier where $U^\circ_K$ saturates trivially).
 
 \subsection{Stratification scheme}
 
@@ -663,25 +770,25 @@ solution token length (a crude proxy for complexity), into terciles:
 (60--120 tokens, $\approx 55$ problems), \textbf{hard} ($>120$ tokens,
 $\approx 54$ problems). We do not attempt to use docstring complexity
 or branching factor; the token-length proxy is sufficient to show that
-$\RhatK > 0$ across the spectrum and is not concentrated at the
+$\hat{\mathcal R}_K > 0$ across the spectrum and is not concentrated at the
 short-solution end.
 
 \paragraph{MathArena and LiveCodeBench.}
 The deployment-experiment splits are small ($M{=}60$ and $M{=}75$
 respectively) so we do not stratify further; the per-difficulty
 breakdown for these datasets is the headline cell. We include them
-unstratified in \cref{tab:per-dataset} for completeness.
+unstratified in \cref{tab:appendix_per_difficulty} for completeness.
 
 \subsection{Headline breakdown}
 
 \input{appendix_inputs/E2_per_difficulty.tex}
 
-\textbf{Interpretation.} The take-away is that $\RhatK$ is bounded
+\textbf{Interpretation.} The take-away is that $\hat{\mathcal R}_K$ is bounded
 away from zero in \emph{every} bucket, including the hardest tier
 (Level 5 MATH, 7+ step GSM8K, hardest-tercile HumanEval), and is
 not concentrated at any single end of the difficulty spectrum. The
-saturation effect in $\UcircK$ on the easiest buckets is expected —
-$\UcircK$ approaches the ceiling of 1 — but $\UbarK$ saturates faster
+saturation effect in $U^\circ_K$ on the easiest buckets is expected —
+$U^\circ_K$ approaches the ceiling of 1 — but $\bar U_K$ saturates faster
 there, so the gap shrinks at the easy end and \emph{grows} on
 mid-difficulty problems where the reachable region remains rich but
 sampling concentration drops. This pattern is consistent across all
@@ -694,7 +801,7 @@ three models.
 This appendix illustrates the rational gap qualitatively: prompts where
 $K{=}64$ contains at least one correct sample
 ($U^\circ_K(x_i) = 1$) but the model's sampling distribution
-\emph{concentrates on incorrect answers} ($\UbarK(x_i)$ small).
+\emph{concentrates on incorrect answers} ($\bar U_K(x_i)$ small).
 The candidate set is filtered by
 $U^\circ_K(x_i)=1 \land \bar U_K(x_i) \le 0.1$ on the three headline
 H1 cells. Per-prompt arrays come from the cell result JSONs

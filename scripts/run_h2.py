@@ -382,6 +382,7 @@ def main() -> None:
                         "k": k,
                         "utility": float(utility[i, k]),
                         "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "a_is_candidate": [bool(b) for b in outcome.a_is_candidate[i, k]],
                         "judge": args.judge_model,
                         "seed": args.seed,
                     },
@@ -436,6 +437,7 @@ def main() -> None:
                         "k": k,
                         "utility": float(utility[i, k]),
                         "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "a_is_candidate": [bool(b) for b in outcome.a_is_candidate[i, k]],
                         "seed": args.seed,
                     },
                 )

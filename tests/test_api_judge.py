@@ -62,6 +62,10 @@ class TestShape:
         out = _score(lambda b, i: _FakeResponse("T"), L=3)
         assert out.utility.shape == (2, 1)
         assert out.raw_verdicts.shape == (2, 1, 3)
+        # a_is_candidate must be a populated (M, K, L) bool array so
+        # appendix D.2 / C.2 can re-derive verdicts from raw judge text.
+        assert out.a_is_candidate.shape == (2, 1, 3)
+        assert out.a_is_candidate.dtype == bool
         assert out.n_judge_calls == 2 * 1 * 3
 
     def test_all_tie_gives_half(self):

@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{GSM8K extractor pattern-firing rates on the three headline cells. \emph{Fires} is the percentage of $(x_i, y_{i,k})$ pairs whose final answer was pulled out by the given regex (priority order is left to right: \texttt{\#\#\#\#} first, then \texttt{\textbackslash boxed}, then ``the answer is'', then the rightmost bare number); \emph{acc.}\ is the conditional correctness given the pattern. A high \emph{fires}/\emph{acc.}\ on \texttt{bare} would indicate the verifier is leaning on a noisy fallback; in practice it does not.}
+\label{tab:appendix_D3_gsm8k_patterns}
+\begin{tabular}{l cc cc cc cc cc r}
+\toprule
+\multirow{2}{*}{Model} & \multicolumn{2}{c}{\texttt{\#\#\#\# $N$}} & \multicolumn{2}{c}{\texttt{\textbackslash boxed\{N\}}} & \multicolumn{2}{c}{``the answer is $N$''} & \multicolumn{2}{c}{\shortstack[c]{last bare \\ number}} & \multicolumn{2}{c}{\shortstack[c]{no number \\ parsed}} & \multirow{2}{*}{$M{\cdot}K$} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7} \cmidrule(lr){8-9} \cmidrule(lr){10-11}
+ & fires & acc. & fires & acc. & fires & acc. & fires & acc. & fires & acc. & \\
+\midrule
+Tülu-3-8B-RLVR & 99.9 & 86.2 & $<$0.1 & 62.5 & \textemdash & \textemdash & $<$0.1 & 25.0 & \textemdash & \textemdash & 84416 \\
+Qwen2.5-7B-Instruct & 84.9 & 90.6 & 14.7 & 90.9 & \textemdash & \textemdash & 0.4 & 72.1 & \textemdash & \textemdash & 84416 \\
+Llama-3.1-8B-Instruct & 1.6 & 74.9 & $<$0.1 & 78.3 & 22.0 & 83.4 & 76.3 & 76.5 & $<$0.1 & \textemdash & 84416 \\
+\bottomrule
+\end{tabular}
+\end{table*}

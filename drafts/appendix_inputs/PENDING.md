@@ -16,30 +16,10 @@ matrix. To produce this:
 
 Then a small post-processor over that JSONL produces the C.2 table.
 
-## D.1 — MATH verifier failure-mode rates
-Needs the **failure-cause** for each `U=0` verification (one of
-{no-boxed, empty-boxed, parse-timeout, verify-timeout, internal-exception,
-incorrect}). The current verifier returns only the float utility. To
-produce this:
-
-  1. Instrument `src.verification.math.verify` to optionally return a
-     reason string alongside `0.0` (no behavioural change at K=64).
-  2. Re-run the verification pass over the cached samples for the three
-     headline (model, MATH) cells; aggregate the reasons.
-  3. The re-verifier here is identical to the one we used to fix the 72B
-     MATH cell (see `_local_backups/rerun_72b_math.py`); just add reason
-     capture.
-
 ## D.2 — Position bias / inter-rater agreement (self-judge cells)
 Needs the per-(prompt, candidate, l) raw verdicts and the
 `a_is_candidate` flag, currently dropped after aggregation. Same fix as
 C.2: re-run with audit logging, then post-process.
-
-## D.3 — GSM8K extractor pattern-firing rates
-Needs to record which of the four GSM8K extractor patterns matched each
-generation. Smallest patch: add an optional `with_reason=True` return mode
-to `src.verification.gsm8k.verify`, then re-extract on the cached samples
-for the three headline (model, GSM8K) cells.
 
 ## G — Failure-case traces
 Qualitative. The pipeline outputs `G_candidates.tex` listing the

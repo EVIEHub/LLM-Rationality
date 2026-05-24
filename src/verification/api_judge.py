@@ -255,6 +255,7 @@ def score_matrix_api(
     return JudgeOutcome(
         utility=utility,
         raw_verdicts=raw_verdicts,
+        a_is_candidate=a_is_candidate,
         parse_failure_rate=n_parse_fail / n if n > 0 else 0.0,
         n_judge_calls=n,
     )

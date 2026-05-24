@@ -75,19 +75,61 @@ def extract_answer(text: str) -> Optional[float]:
         The parsed answer as a ``float``, or ``None`` if no parseable
         number is found.
     """
-    for pattern in (_HASHED_PATTERN, _BOXED_PATTERN, _ANSWER_IS_PATTERN):
+    return extract_answer_with_pattern(text)[0]
+
+
+def extract_answer_with_pattern(text: str) -> tuple[Optional[float], str]:
+    """Like :func:`extract_answer` but also returns which pattern fired.
+
+    The pattern tag is one of ``"hashed"`` (``#### N``), ``"boxed"``
+    (``\\boxed{N}``), ``"answer_is"`` ("the answer is N"), ``"bare"``
+    (rightmost bare number fallback), or ``"none"`` if nothing parsed.
+    Used by appendix D.3 to count pattern-firing rates without
+    re-implementing the extractor. The numeric return matches
+    :func:`extract_answer` exactly so this is a strict superset.
+    """
+    named = (
+        (_HASHED_PATTERN, "hashed"),
+        (_BOXED_PATTERN, "boxed"),
+        (_ANSWER_IS_PATTERN, "answer_is"),
+    )
+    for pattern, name in named:
         matches = pattern.findall(text)
         if matches:
             value = _normalise(matches[-1])
             if value is not None:
-                return value
+                return value, name
 
     bare_matches = _BARE_NUMBER_PATTERN.findall(text)
     for token in reversed(bare_matches):
         value = _normalise(token)
         if value is not None:
-            return value
-    return None
+            return value, "bare"
+    return None, "none"
+
+
+def verify_with_reason(generation: str, ground_truth: str) -> tuple[float, str]:
+    """Like :func:`verify` but also returns a short failure-cause tag.
+
+    The tag is one of the pattern names from
+    :func:`extract_answer_with_pattern` for the *prediction* side
+    (``"hashed"``, ``"boxed"``, ``"answer_is"``, ``"bare"``), or
+    ``"none"`` if no number could be parsed from the generation, or
+    ``"gt_unparseable"`` if the ground truth itself cannot be parsed
+    (should never happen on canonical GSM8K but is defensive), or
+    ``"incorrect"`` if the predicted number does not match the target.
+    The numeric utility return matches :func:`verify` exactly. Used by
+    appendix D.3 to break down pattern-firing rates by correctness.
+    """
+    predicted, pattern = extract_answer_with_pattern(generation)
+    target = extract_answer(ground_truth)
+    if target is None:
+        return 0.0, "gt_unparseable"
+    if predicted is None:
+        return 0.0, "none"
+    if math.isclose(predicted, target, rel_tol=1e-9, abs_tol=1e-9):
+        return 1.0, pattern
+    return 0.0, "incorrect"
 
 
 def verify(generation: str, ground_truth: str) -> float:
@@ -104,10 +146,4 @@ def verify(generation: str, ground_truth: str) -> float:
         a small numeric tolerance (so ``72`` matches ``72.0``), else
         ``0.0``. Returns ``0.0`` if either side cannot be parsed.
     """
-    predicted = extract_answer(generation)
-    target = extract_answer(ground_truth)
-    if predicted is None or target is None:
-        return 0.0
-    if math.isclose(predicted, target, rel_tol=1e-9, abs_tol=1e-9):
-        return 1.0
-    return 0.0
+    return verify_with_reason(generation, ground_truth)[0]

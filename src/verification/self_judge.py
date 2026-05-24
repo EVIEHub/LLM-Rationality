@@ -44,10 +44,18 @@ _JUDGE_MAX_TOKENS = 8
 
 @dataclass(frozen=True)
 class JudgeOutcome:
-    """Per-cell judge bookkeeping. Useful for audit / debugging."""
+    """Per-cell judge bookkeeping. Useful for audit / debugging.
+
+    The ``a_is_candidate`` array makes the audit log self-contained:
+    given a recorded verdict and the position flag, downstream code can
+    recover *which response the judge actually picked* without re-rolling
+    the position coins. Required by appendix D.2 (position-bias rate)
+    and C.2 (L-sensitivity re-aggregation).
+    """
 
     utility: np.ndarray            # (M, K) float in {0, 0.5, 1}
     raw_verdicts: np.ndarray       # (M, K, L) float in {0, 0.5, 1} — per-call outcomes
+    a_is_candidate: np.ndarray     # (M, K, L) bool — True iff candidate was in position A
     parse_failure_rate: float      # fraction of judge outputs that did not parse to A/B/T
     n_judge_calls: int             # total calls = M * K * L
 
@@ -244,6 +252,7 @@ def score_matrix(
     return JudgeOutcome(
         utility=utility,
         raw_verdicts=raw_verdicts,
+        a_is_candidate=a_is_candidate,
         parse_failure_rate=n_parse_fail / (M * K * L) if M * K * L > 0 else 0.0,
         n_judge_calls=M * K * L,
     )

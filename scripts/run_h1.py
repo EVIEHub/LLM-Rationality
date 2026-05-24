@@ -422,6 +422,7 @@ def main() -> None:
                         "k": k,
                         "utility": float(utility[i, k]),
                         "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "a_is_candidate": [bool(b) for b in outcome.a_is_candidate[i, k]],
                         "judge": args.judge_model,
                         "seed": args.seed,
                     },
@@ -464,6 +465,9 @@ def main() -> None:
             outcome.parse_failure_rate, outcome.n_judge_calls,
         )
         # Audit log: one record per (prompt, sample) summarising L votes.
+        # ``a_is_candidate`` is the per-call position-coin record needed by
+        # appendix D.2 (position-bias rate) and C.2 (L-sensitivity
+        # re-aggregation); see :class:`JudgeOutcome` for the contract.
         for i in range(M):
             for k in range(args.K):
                 log_verifier_decision(
@@ -475,6 +479,7 @@ def main() -> None:
                         "k": k,
                         "utility": float(utility[i, k]),
                         "raw_verdicts": [float(v) for v in outcome.raw_verdicts[i, k]],
+                        "a_is_candidate": [bool(b) for b in outcome.a_is_candidate[i, k]],
                         "seed": args.seed,
                     },
                 )

@@ -48,11 +48,14 @@ plt.rcParams.update({
 
 
 # Canonical ordering for the figure grids (Conversation -> Development ->
-# Deployment); only datasets actually present are shown.
+# Deployment); only datasets actually present are shown. LiveCodeBench is
+# intentionally excluded — H3 procedures (SC, temperature sweep) don't
+# motivate a coding-benchmark column in the figure narrative; the LCB
+# numbers stay in the headline H1/H5 tables.
 _DATASET_ORDER = [
     ("ultrafeedback", "UltraFeedback"), ("alpaca_eval", "AlpacaEval"),
     ("gsm8k", "GSM8K"), ("math", "MATH"), ("humaneval", "HumanEval"),
-    ("livecodebench", "LiveCB"), ("matharena", "MathArena"),
+    ("matharena", "MathArena"),
 ]
 _MODEL_ORDER = [
     ("tulu3-8b-rlvr", "Tülu-3-8B-RLVR"),

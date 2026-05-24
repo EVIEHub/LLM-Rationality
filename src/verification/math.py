@@ -74,45 +74,26 @@ def _extract_last_boxed(text: str) -> Optional[str]:
     return None
 
 
-def verify(generation: str, ground_truth: str) -> float:
-    """Verify a MATH model generation against the LaTeX ground truth.
+def verify_with_reason(generation: str, ground_truth: str) -> tuple[float, str]:
+    """Like :func:`verify` but also returns a short failure-cause tag.
 
-    The predicted answer is taken from the last balanced ``\\boxed{...}``
-    in ``generation``; if no such boxed expression exists, the
-    generation is considered to have failed the format requirement and
-    the function returns ``0.0``. The ground truth may be wrapped in
-    ``\\boxed{...}`` (as in some MATH dataset variants) or be a bare
-    LaTeX expression; both are handled.
-
-    Equivalence is delegated to ``math_verify.verify``, which compares
-    SymPy-parsed expressions and handles common LaTeX equivalences
-    (``\\frac{1}{2} \\leftrightarrow 0.5``, ``\\sqrt{12} \\leftrightarrow
-    2\\sqrt{3}``, algebraic rearrangements, intervals, etc.).
-
-    Args:
-        generation: The model's full output text for a MATH prompt.
-        ground_truth: The ground-truth answer, as a LaTeX expression or
-            a string already wrapped in ``\\boxed{...}``.
-
-    Returns:
-        ``1.0`` if the predicted expression is symbolically equivalent
-        to the ground truth, else ``0.0``. Returns ``0.0`` on any of:
-        no ``\\boxed{}`` in the generation, empty ground truth, parse
-        failure, ``math-verify`` timeout, or any internal exception.
+    The tag is one of ``"no_boxed"``, ``"empty_gt"``, ``"parse_error"``,
+    ``"parse_empty"``, ``"verify_exception"``, ``"incorrect"``, or
+    ``"correct"``. The numeric utility return matches :func:`verify`
+    exactly (so this is a strict superset for auditing). Used by the
+    appendix builders (D.1) to count per-failure-mode rates without
+    re-implementing the verifier.
     """
     pred_str = _extract_last_boxed(generation)
     if pred_str is None:
-        return 0.0
+        return 0.0, "no_boxed"
 
     gt_str = _extract_last_boxed(ground_truth)
     if gt_str is None:
         gt_str = ground_truth.strip()
     if not gt_str:
-        return 0.0
+        return 0.0, "empty_gt"
 
-    # Wrap both sides in \boxed{} so math-verify's parser anchors on a
-    # known marker. Without the anchor, bare LaTeX like "2\sqrt{3}" is
-    # silently truncated to its leading integer.
     try:
         gold = math_verify.parse(
             f"\\boxed{{{gt_str}}}",
@@ -123,10 +104,10 @@ def verify(generation: str, ground_truth: str) -> float:
             parsing_timeout=_PARSE_TIMEOUT_SECONDS,
         )
     except Exception:
-        return 0.0
+        return 0.0, "parse_error"
 
     if not gold or not pred:
-        return 0.0
+        return 0.0, "parse_empty"
 
     try:
         is_equivalent = math_verify.verify(
@@ -135,6 +116,17 @@ def verify(generation: str, ground_truth: str) -> float:
             timeout_seconds=_VERIFY_TIMEOUT_SECONDS,
         )
     except Exception:
-        return 0.0
+        return 0.0, "verify_exception"
 
-    return 1.0 if is_equivalent else 0.0
+    return (1.0, "correct") if is_equivalent else (0.0, "incorrect")
+
+
+def verify(generation: str, ground_truth: str) -> float:
+    """Verify a MATH model generation against the LaTeX ground truth.
+
+    Thin wrapper over :func:`verify_with_reason` that returns only the
+    numeric utility — the public verifier API used by the cell runners
+    is unchanged. See :func:`verify_with_reason` for the failure-cause
+    surface (used by appendix D.1).
+    """
+    return verify_with_reason(generation, ground_truth)[0]
