@@ -111,8 +111,8 @@ gpt-5.5:
   api_model: "gpt-5.5"
   api_base_url_env: "TP_BASE_URL"
   api_key_env: "TP_API_KEY"
-  reasoning_effort: "minimal"   # non-thinking: full reasoning -> proxy 504 gateway timeout
-  notes: "Newest frontier hosted model via the same proxy as gpt-5.2-chat. H5 API subject, NON-THINKING (reasoning_effort=minimal) because full reasoning exceeds the proxy gateway timeout (504). Same-mode comparison to gpt-5.2-chat. Floating tag — record access date. ChatGPT-account quota => 429 throttling, relies on ApiRunner retry/resume."
+  reasoning_effort: "none"      # non-thinking: full reasoning -> proxy 504 gateway timeout
+  notes: "Newest frontier hosted model via the same proxy as gpt-5.2-chat. H5 API subject, NON-THINKING (reasoning_effort=none) because full reasoning exceeds the proxy gateway timeout (504). Same-mode comparison to gpt-5.2-chat. Valid values per proxy: none/low/medium/high/xhigh; 'minimal' is rejected (HTTP 400 invalid_request_error). Floating tag — record access date. ChatGPT-account daily quota => quota-exhausted returns 429; ApiRunner does NOT retry on 429 (would trigger anti-abuse -> 401 API_KEY_DISABLED)."
 
 deepseek-v4-flash:
   hf_id: "deepseek-v4-flash"

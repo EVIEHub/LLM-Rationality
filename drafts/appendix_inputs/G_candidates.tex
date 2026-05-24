@@ -1,0 +1,13 @@
+\paragraph{Spike-at-0 candidate prompts for the failure-case appendix.} The full per-prompt arrays in the result JSONs let any reader filter the same candidate set themselves; the rule is:
+$U^\circ_K(x_i)=1$ \emph{and} $\bar U_K(x_i) \le 0.1$, i.e.\ the model can reach the correct answer in 64 samples but only on a small fraction of them. The candidate counts below come straight from the per-prompt arrays:
+\begin{itemize}
+  \item Tülu-3-8B-RLVR / GSM8K: 35 candidates out of 1319 prompts.
+  \item Tülu-3-8B-RLVR / MATH: 68 candidates out of 1000 prompts.
+  \item Tülu-3-8B-RLVR / HumanEval: 29 candidates out of 164 prompts.
+  \item Qwen2.5-7B-Instruct / GSM8K: 22 candidates out of 1319 prompts.
+  \item Qwen2.5-7B-Instruct / MATH: 15 candidates out of 1000 prompts.
+  \item Qwen2.5-7B-Instruct / HumanEval: 9 candidates out of 164 prompts.
+  \item Llama-3.1-8B-Instruct / GSM8K: 45 candidates out of 1319 prompts.
+  \item Llama-3.1-8B-Instruct / MATH: 115 candidates out of 1000 prompts.
+  \item Llama-3.1-8B-Instruct / HumanEval: 23 candidates out of 164 prompts.
+\end{itemize}

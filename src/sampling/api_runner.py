@@ -43,8 +43,35 @@ logger = logging.getLogger(__name__)
 # Retry policy for transient proxy failures. Includes the Cloudflare-style
 # 52x codes and 544 ("Error return from script") seen from the DeepSeek
 # proxy — all server-side/transient, so safe to retry rather than abort a cell.
-_RETRYABLE_STATUS = {408, 409, 429, 500, 502, 503, 504, 520, 521, 522, 524, 544}
+#
+# 429 is handled separately by `_is_retryable_429`: the same HTTP code is
+# returned for two very different conditions on quota-capped proxies (e.g.
+# chivier's ChatGPT-account gateway used by gpt-5.2-chat / gpt-5.5):
+#   - "API_KEY_QUOTA_EXHAUSTED" (daily account quota used up): NOT retryable —
+#     retrying floods the proxy with rejected requests and trips its
+#     anti-abuse, disabling the key (HTTP 401 API_KEY_DISABLED).
+#   - "Upstream rate limit exceeded" / "rate_limit_error" (per-minute upstream
+#     throttle): retryable — backing off and trying again works.
+# The body-substring discriminator below distinguishes the two without
+# touching the proxy. For metered APIs (DeepSeek), 429 is rare and falls
+# through to the retryable branch by default.
+_RETRYABLE_STATUS = {408, 409, 500, 502, 503, 504, 520, 521, 522, 524, 544}
+_RETRYABLE_429_BODY_SUBSTRINGS = ("rate_limit", "Upstream", "upstream", "Too Many Requests")
+_NON_RETRYABLE_429_BODY_SUBSTRINGS = ("QUOTA_EXHAUSTED", "quota", "exhausted")
 _MAX_RETRIES = 6
+
+
+def _is_retryable_429(body: str) -> bool:
+    """Return True for transient upstream rate limits, False for quota-exhausted.
+
+    Defaults to False (non-retryable) when neither substring matches — quota
+    issues on quota-capped proxies must never silently retry into a key ban.
+    """
+    if any(s in body for s in _NON_RETRYABLE_429_BODY_SUBSTRINGS):
+        return False
+    if any(s in body for s in _RETRYABLE_429_BODY_SUBSTRINGS):
+        return True
+    return False
 _BACKOFF_BASE_S = 2.0
 _BACKOFF_MAX_S = 60.0
 
@@ -181,7 +208,12 @@ class ApiRunner:
                     data = r.json()
                     return data["choices"][0]["message"]["content"] or ""
                 last_err = f"HTTP {r.status_code}: {r.text[:160]}"
-                if r.status_code not in _RETRYABLE_STATUS:
+                if r.status_code == 429:
+                    # 429 has two sub-types on quota-capped proxies; the body
+                    # tells them apart (see `_is_retryable_429`).
+                    if not _is_retryable_429(r.text):
+                        raise RuntimeError(f"non-retryable {last_err}")
+                elif r.status_code not in _RETRYABLE_STATUS:
                     raise RuntimeError(f"non-retryable {last_err}")
             except Exception as e:  # noqa: BLE001 — retry transport + 5xx alike
                 last_err = f"{type(e).__name__}: {e}"

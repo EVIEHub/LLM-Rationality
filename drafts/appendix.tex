@@ -246,30 +246,7 @@ recorded separately. The reported numbers are GPU-hours from the
 $\tau{=}1$ and H2 RLVR cells are cache hits and contribute zero
 incremental GPU-hours.
 
-\begin{table}[h]
-\centering
-\small
-\caption{GPU-hour breakdown per experiment, on the headline panels.
-Numbers are for the operating cluster of \PH{e.g.\ 2$\times$A800-80G};
-they scale roughly linearly in the number of (model, dataset, seed)
-cells and in $K$. SC cells in H3 are CPU-only and not listed.}
-\label{tab:gpu-hours}
-\begin{tabular}{lrrrr}
-\toprule
-Experiment & Cells & GPU-hr (sampling) & GPU-hr (verify) & Total \\
-\midrule
-H1 (3 models $\times$ 3 datasets $\times$ 3 seeds, $K{=}64$) & 27 & \PH{} & \PH{} & \PH{} \\
-H1 deployment (3 models $\times$ 2 datasets, $K{=}64$)       & 6  & \PH{} & \PH{} & \PH{} \\
-H1 preference (3 models $\times$ UltraFeedback, $K{=}32$, $L{=}5$) & 3 & \PH{} & \PH{} & \PH{} \\
-H2 trajectory (4 stages $\times$ 2 datasets, $K{=}64$)       & 8  & \PH{} & \PH{} & \PH{} \\
-H3 direct $\tau{\in}\{0,0.7\}$ (3 models $\times$ 3 datasets)& 18 & \PH{} & \PH{} & \PH{} \\
-H3 SC($n$) sweep (CPU only)                                  & 30 & 0     & \PH{} & \PH{} \\
-H4 length sweep (1 model $\times$ 2 datasets $\times$ 7 $L$) & 14 & \PH{} & \PH{} & \PH{} \\
-\midrule
-\textbf{Total billable}                                      & --- & \PH{} & \PH{} & \PH{} \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{appendix_inputs/B4_gpu_hours.tex}
 
 \subsection{Random seeds}
 \label{app:config:seeds}
@@ -316,36 +293,7 @@ for the three headline H1 cells, including $\UcircK$ and $\UbarK$ at
 every grid point. The corresponding plot is Figure~1 in the main text;
 this table is the raw data behind it.
 
-\begin{table}[h]
-\centering
-\small
-\caption{Headline H1 saturation curve. Each entry is the
-prompt-mean at the given $K'$; brackets give the 95\% prompt-bootstrap
-CI on $\RhatK(K')$ (B$=$1000 resamples). Numbers from
-\texttt{outputs/results/h1/<model>\_<dataset>\_seed0.json,
-saturation\_curve[\ldots]}.}
-\label{tab:sat-headline}
-\begin{tabular}{llcccccccc}
-\toprule
-Model & Dataset & Metric & $K{=}1$ & $K{=}2$ & $K{=}4$ & $K{=}8$ & $K{=}16$ & $K{=}32$ & $K{=}64$ \\
-\midrule
-\multirow{3}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{GSM8K}
-  & $\UcircK$ & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-& & $\UbarK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-& & $\RhatK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-\midrule
-\multirow{3}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{MATH alg.}
-  & $\UcircK$ & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-& & $\UbarK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-& & $\RhatK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-\midrule
-\multirow{3}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{HumanEval}
-  & $\UcircK$ & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-& & $\UbarK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-& & $\RhatK$  & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} & \PH{} \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{appendix_inputs/C1_saturation.tex}
 
 \textbf{Interpretation.} The saturation curve is monotone non-decreasing
 in $K'$ by construction (taking the max over a larger set can only
@@ -415,27 +363,7 @@ subsets of the per-prompt array
 \texttt{per\_prompt\_R\_hat\_K} at $M' \in \{50, 100, 200, 500, 1000, 1319\}$
 without replacement, with $B{=}1000$ bootstrap resamples at each $M'$.
 
-\begin{table}[h]
-\centering
-\small
-\caption{Convergence of the prompt-bootstrap CI half-width on $\RhatK$.
-Tülu-3-RLVR / GSM8K cell, $K{=}64$. Last column is the empirical
-half-width divided by $1/\sqrt{M'}$; a near-constant ratio is the
-sanity check that we are in the asymptotic regime.}
-\label{tab:M-sensitivity}
-\begin{tabular}{rcc}
-\toprule
-$M'$ & CI half-width & half-width$\cdot\sqrt{M'}$ \\
-\midrule
-50    & \PH{} & \PH{} \\
-100   & \PH{} & \PH{} \\
-200   & \PH{} & \PH{} \\
-500   & \PH{} & \PH{} \\
-1000  & \PH{} & \PH{} \\
-1319  & \PH{} & \PH{} \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{appendix_inputs/C3_M_convergence.tex}
 
 \subsection{Linking to Theorem~1}
 \label{app:calibration:thm1}
@@ -746,39 +674,7 @@ unstratified in \cref{tab:per-dataset} for completeness.
 
 \subsection{Headline breakdown}
 
-\begin{table}[h]
-\centering
-\small
-\caption{Per-difficulty breakdown of $\RhatK$ at $K{=}64$ on the
-headline H1 cells. Values are prompt-mean within each bucket;
-brackets give the 95\% prompt-bootstrap CI computed on the bucket
-alone (B$=$1000 resamples). Per-bucket $M$ in
-\cref{app:per-dataset} subsection above.}
-\label{tab:per-dataset}
-\begin{tabular}{lllccc}
-\toprule
-Dataset & Bucket & Bucket $M$ & Tülu-3-8B-RLVR & Qwen2.5-7B-Inst & Llama-3.1-8B-Inst \\
-\midrule
-\multirow{4}{*}{GSM8K} & 1--2 steps  & \PH{} & \PH{} & \PH{} & \PH{} \\
-                       & 3--4 steps  & \PH{} & \PH{} & \PH{} & \PH{} \\
-                       & 5--6 steps  & \PH{} & \PH{} & \PH{} & \PH{} \\
-                       & 7+ steps    & \PH{} & \PH{} & \PH{} & \PH{} \\
-\midrule
-\multirow{5}{*}{MATH algebra} & Level 1 & \PH{} & \PH{} & \PH{} & \PH{} \\
-                              & Level 2 & \PH{} & \PH{} & \PH{} & \PH{} \\
-                              & Level 3 & \PH{} & \PH{} & \PH{} & \PH{} \\
-                              & Level 4 & \PH{} & \PH{} & \PH{} & \PH{} \\
-                              & Level 5 & \PH{} & \PH{} & \PH{} & \PH{} \\
-\midrule
-\multirow{3}{*}{HumanEval} & easy (token-length tercile)   & \PH{} & \PH{} & \PH{} & \PH{} \\
-                           & medium                        & \PH{} & \PH{} & \PH{} & \PH{} \\
-                           & hard                          & \PH{} & \PH{} & \PH{} & \PH{} \\
-\midrule
-MathArena (AIME 2025 + BRUMO 2025) & (no stratification) & 60 & \PH{} & \PH{} & \PH{} \\
-LiveCodeBench (post-2024-01-01)     & (no stratification) & 75 & \PH{} & \PH{} & \PH{} \\
-\bottomrule
-\end{tabular}
-\end{table}
+\input{appendix_inputs/E2_per_difficulty.tex}
 
 \textbf{Interpretation.} The take-away is that $\RhatK$ is bounded
 away from zero in \emph{every} bucket, including the hardest tier
@@ -798,182 +694,17 @@ three models.
 This appendix illustrates the rational gap qualitatively: prompts where
 $K{=}64$ contains at least one correct sample
 ($U^\circ_K(x_i) = 1$) but the model's sampling distribution
-\emph{concentrates on incorrect answers} (\,$\UbarK(x_i)$ small).
-Concretely, we filter the headline Tülu-3-RLVR cells for prompts with
-$U^\circ_K(x_i) = 1$ and $\UbarK(x_i) \leq 0.1$, and reproduce the
-ground truth, one correct sample (chosen as the lowest-$k$ sample
-with $U=1$), and one representative incorrect sample (the highest-$k$
-sample with $U=0$, to ensure the two come from different vLLM
-sampling positions). Per-prompt utility arrays come from the
-\texttt{per\_prompt\_U\_circ\_K} and \texttt{per\_prompt\_U\_bar\_K}
-fields of the cell result JSON; the underlying generations come from
-the sample cache.
+\emph{concentrates on incorrect answers} ($\UbarK(x_i)$ small).
+The candidate set is filtered by
+$U^\circ_K(x_i)=1 \land \bar U_K(x_i) \le 0.1$ on the three headline
+H1 cells. Per-prompt arrays come from the cell result JSONs
+(\texttt{per\_prompt\_U\_circ\_K}, \texttt{per\_prompt\_U\_bar\_K});
+the underlying generations come from the sample cache.
 
-\subsection{Anatomy of one trace}
+\input{appendix_inputs/G_candidates.tex}
 
-Each failure case is rendered with four blocks:
-
-\begin{enumerate}
-\item \textbf{Prompt}: the raw question text (truncated at 400
-      characters if longer).
-\item \textbf{Per-prompt utilities}: $U^\circ_{64}(x_i)$,
-      $\bar U_{64}(x_i)$, and the number of correct samples out of
-      $K=64$.
-\item \textbf{Correct sample (k=$\PH{k_{\text{ok}}}$)}: the
-      lowest-$k$ correct generation, full reasoning trace, with the
-      final answer highlighted.
-\item \textbf{Incorrect sample (k=$\PH{k_{\text{bad}}}$)}: a
-      representative wrong generation drawn from the dominant
-      incorrect mode (e.g.\ a frequent off-by-one or sign error).
-\end{enumerate}
-
-\subsection{Selected traces}
-
-\paragraph{Trace 1: GSM8K, Tülu-3-RLVR, prompt id \PH{gsm8k\_NNN}.}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
-PROMPT:
-\PH{full GSM8K question text from outputs/samples/...}
-
-PER-PROMPT UTILITY:
-  U_circ_64 = 1
-  U_bar_64  = \PH{value in (0, 0.1]}
-  # correct samples / K = \PH{e.g. 3 / 64}
-
-CORRECT SAMPLE (k = \PH{k_ok}):
-\PH{full generation, ending with #### <correct number>}
-
-INCORRECT SAMPLE (k = \PH{k_bad}):
-\PH{full generation, ending with #### <wrong number>}
-
-ERROR PATTERN:
-  \PH{e.g. "off-by-one in the final subtraction step"}
-\end{lstlisting}
-
-\paragraph{Trace 2: MATH algebra, Tülu-3-RLVR, prompt id \PH{math\_NNN}.}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
-PROMPT:
-\PH{full MATH problem statement}
-
-PER-PROMPT UTILITY:
-  U_circ_64 = 1
-  U_bar_64  = \PH{value in (0, 0.1]}
-  # correct samples / K = \PH{e.g. 5 / 64}
-
-CORRECT SAMPLE (k = \PH{k_ok}):
-\PH{reasoning trace ending in \boxed{<correct LaTeX>}}
-
-INCORRECT SAMPLE (k = \PH{k_bad}):
-\PH{reasoning trace ending in \boxed{<wrong LaTeX>}}
-
-ERROR PATTERN:
-  \PH{e.g. "wrong sign on the quadratic root", "dropped a factor of 2"}
-\end{lstlisting}
-
-\paragraph{Trace 3: HumanEval, Tülu-3-RLVR, prompt id \PH{humaneval\_NNN}.}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
-PROMPT:
-\PH{HumanEval function signature + docstring}
-
-PER-PROMPT UTILITY:
-  U_circ_64 = 1
-  U_bar_64  = \PH{value in (0, 0.1]}
-  # correct samples / K = \PH{e.g. 2 / 64}
-
-CORRECT SAMPLE (k = \PH{k_ok}):
-\PH{passing function body}
-
-INCORRECT SAMPLE (k = \PH{k_bad}):
-\PH{function body that fails one of the canonical assertions}
-
-FAILING ASSERTION:
-  \PH{e.g. "check(candidate) failed at assert candidate([3, 1, 4]) == 4"}
-\end{lstlisting}
-
-\paragraph{Trace 4: MathArena (AIME 2025), Tülu-3-RLVR, prompt id
-\PH{matharena\_NNN}.}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
-PROMPT:
-\PH{AIME 2025 problem text}
-
-PER-PROMPT UTILITY:
-  U_circ_64 = 1
-  U_bar_64  = \PH{value in (0, 0.1]}
-  # correct samples / K = \PH{e.g. 1 / 64}
-
-CORRECT SAMPLE (k = \PH{k_ok}):
-\PH{trace ending in \boxed{<correct integer>}}
-
-INCORRECT SAMPLE (k = \PH{k_bad}):
-\PH{trace ending in \boxed{<wrong integer>}}
-
-ERROR PATTERN:
-  \PH{e.g. "modular-arithmetic step omitted, leading to off-by-mod-1"}
-\end{lstlisting}
-
-\paragraph{Trace 5: UltraFeedback (preference), Tülu-3-RLVR judge,
-prompt id \PH{ultrafeedback\_NNN}.}
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,breaklines=true,frame=single]
-PROMPT:
-\PH{open-ended user question}
-
-REFERENCE (chosen):
-\PH{the GPT-4-judged-better response from ultrafeedback_binarized}
-
-PER-PROMPT UTILITY:
-  U_circ_32 = 1   (at least one candidate beats the reference)
-  U_bar_32  = \PH{value, e.g. 0.32 (mean of L=5 majority votes)}
-
-CANDIDATE THAT WON (k = \PH{k_ok}):
-\PH{candidate text; the judge picked it 5/5 or 4/5 times}
-
-CANDIDATE THAT LOST (k = \PH{k_bad}):
-\PH{candidate text; the judge picked the reference 5/5 or 4/5 times}
-
-JUDGE BEHAVIOUR ON THE LOSING CANDIDATE:
-  raw_verdicts (L=5) = \PH{[0, 0, 0, 0.5, 0]}
-\end{lstlisting}
-
-\subsection{Quantitative summary of failure-case patterns}
-
-\begin{table}[h]
-\centering
-\small
-\caption{Distribution of the most common error patterns observed in
-the failure-case set (prompts with $U^\circ_{64}=1$ and
-$\bar U_{64} \leq 0.1$). ``Share'' is the fraction of failure-case
-prompts dominated by each pattern, by hand inspection of \PH{$N$, e.g.\
-50} randomly sampled traces per dataset, with two annotators
-agreeing.}
-\label{tab:failure-patterns}
-\begin{tabular}{llc}
-\toprule
-Dataset & Dominant error pattern in the failure set & Share \\
-\midrule
-\multirow{4}{*}{GSM8K} & arithmetic slip in the last 1--2 steps         & \PH{} \\
-                       & misread a quantity from the prompt              & \PH{} \\
-                       & correct chain, wrong format (no \texttt{\#\#\#\#}) & \PH{} \\
-                       & confused unit / dollar / percent                & \PH{} \\
-\midrule
-\multirow{4}{*}{MATH alg.} & wrong sign or wrong root selected              & \PH{} \\
-                           & dropped a factor (constant or symbolic)        & \PH{} \\
-                           & did not box the final expression               & \PH{} \\
-                           & gave a numerical decimal instead of exact form & \PH{} \\
-\midrule
-\multirow{3}{*}{HumanEval} & off-by-one in a loop bound                     & \PH{} \\
-                           & wrong handling of empty / single-element input & \PH{} \\
-                           & inverted boolean predicate                     & \PH{} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The qualitative picture is consistent across datasets: in the failure
-set, the reachable region of $\pi_\theta$ contains a fully correct
-solution, but the bulk of $\pi_\theta$'s probability mass sits on
-nearby \emph{modes} that share most of the reasoning trace and differ
-only in a localised step (a sign flip, a factor, a loop bound, a
-boxed-vs-unboxed final commit). This is exactly the morphology the
-paper's theory predicts for a non-trivial $\RhatK$: $\pi_\theta$ is
-expressive enough to reach the correct answer but does not concentrate
-on it.
-
-% =====================================================================
+From these candidates we select 4--5 traces per dataset and reproduce
+(i)~the prompt, (ii)~the lowest-$k$ correct sample, and
+(iii)~a representative incorrect sample (highest-$k$, $U=0$). The
+selection step is editorial and not auto-generated; the scripted half
+is the candidate filter shown above.

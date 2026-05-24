@@ -30,7 +30,10 @@ declare -A DS_GPUMEM=( [gsm8k]=0.85 [math]=0.85 [humaneval]=0.85 [matharena]=0.7
 # alias -> HF cache dir name (for rotation deletes).
 declare -A HF_DIR=( [tulu3-8b-sft]=models--allenai--Llama-3.1-Tulu-3-8B-SFT
                     [tulu3-8b-dpo]=models--allenai--Llama-3.1-Tulu-3-8B-DPO
-                    [tulu3-8b-rlvr]=models--allenai--Llama-3.1-Tulu-3-8B )
+                    [tulu3-8b-rlvr]=models--allenai--Llama-3.1-Tulu-3-8B
+                    [tulu3-70b-sft]=models--allenai--Llama-3.1-Tulu-3-70B-SFT
+                    [tulu3-70b-dpo]=models--allenai--Llama-3.1-Tulu-3-70B-DPO
+                    [tulu3-70b-rlvr]=models--allenai--Llama-3.1-Tulu-3-70B )
 
 read -ra STAGES <<< "${STAGES:-tulu3-8b-sft tulu3-8b-dpo tulu3-8b-rlvr}"
 read -ra DATASETS <<< "${DATASETS:-gsm8k math humaneval matharena livecodebench ultrafeedback alpaca_eval}"

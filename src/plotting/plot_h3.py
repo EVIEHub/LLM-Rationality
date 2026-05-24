@@ -38,12 +38,12 @@ plt.rcParams.update({
     "font.serif": ["Times New Roman", "Nimbus Roman", "Liberation Serif",
                    "STIXGeneral", "DejaVu Serif"],
     "mathtext.fontset": "stix",
-    "font.size": 13,
-    "axes.titlesize": 15,
-    "axes.labelsize": 15,
-    "xtick.labelsize": 13,
-    "ytick.labelsize": 15,
-    "legend.fontsize": 12,
+    "font.size": 16,
+    "axes.titlesize": 18,
+    "axes.labelsize": 18,
+    "xtick.labelsize": 15,
+    "ytick.labelsize": 17,
+    "legend.fontsize": 15,
 })
 
 
@@ -52,7 +52,7 @@ plt.rcParams.update({
 _DATASET_ORDER = [
     ("ultrafeedback", "UltraFeedback"), ("alpaca_eval", "AlpacaEval"),
     ("gsm8k", "GSM8K"), ("math", "MATH"), ("humaneval", "HumanEval"),
-    ("matharena", "MathArena"), ("livecodebench", "LiveCodeBench"),
+    ("livecodebench", "LiveCB"), ("matharena", "MathArena"),
 ]
 _MODEL_ORDER = [
     ("tulu3-8b-rlvr", "Tülu-3-8B-RLVR"),
@@ -60,11 +60,12 @@ _MODEL_ORDER = [
     ("llama3.1-8b-instruct", "Llama-3.1-8B-Instruct"),
 ]
 
-# REU / AEU / RVR line styles. RVR solid; REU / AEU dotted.
+# REU / AEU / RVR line styles — colours anchored to match the tables.
+# RVR is the headline (solid line); REU and AEU are the decomposition (dotted).
 _METRIC_STYLE = [
-    ("U_circ_K", "REU", "#3B75AF", "^", ":"),   # blue, dotted
-    ("U_bar_K",  "AEU", "#EF8636", "v", ":"),   # orange, dotted
-    ("R_hat_K",  "RVR", "#519E3E", "o", "-"),   # green, solid
+    ("U_circ_K", "REU", "#A5D2E8", "^", ":"),   # light blue, dotted
+    ("U_bar_K",  "AEU", "#E5B88E", "v", ":"),   # light peach/orange, dotted
+    ("R_hat_K",  "RVR", "#CE80D8", "o", "-"),   # light magenta, solid
 ]
 
 _TAUS = [0.0, 0.7, 1.0]
@@ -125,7 +126,7 @@ def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path |
                             [c["bootstrap_R_hat_K_at_K_max"]["ci_high"] - y for y, c in zip(ys, rows)],
                         ]
                         kw["capsize"] = 2.5
-                    ax.errorbar(xs, ys, marker=marker, lw=1.7, ls=ls, color=color,
+                    ax.errorbar(xs, ys, marker=marker, lw=3.0, markersize=8, ls=ls, color=color,
                                 label=(label if legend_panel else None), **kw)
             ax.set_xticks(range(len(all_ns)))
             ax.set_xticklabels([str(n) for n in all_ns])
@@ -134,11 +135,13 @@ def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path |
             if i == len(models) - 1:
                 ax.set_xlabel(r"$n$")
             if j == 0:
-                ax.set_ylabel(m_lbl + "\nutility", fontsize=16)
+                # SC ylabel uses the model name -- keep it a touch smaller
+                # than the temperature plot's ylabel (which uses dataset names).
+                ax.set_ylabel(m_lbl + "\nutility", fontsize=15)
             if i == 0:
-                ax.set_title(ds_lbl, fontsize=15)
+                ax.set_title(ds_lbl, fontsize=18)
             if legend_panel:
-                ax.legend(fontsize=12, loc="upper right")
+                ax.legend(fontsize=15, loc="upper right")
 
     fig.tight_layout()
     return _save(fig, figures_dir, "h3_sc_saturation")
@@ -182,7 +185,7 @@ def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | N
                              for t in present_taus],
                         ]
                         kw["capsize"] = 2.5
-                    ax.errorbar(present_taus, ys, marker=marker, lw=1.7, ls=ls,
+                    ax.errorbar(present_taus, ys, marker=marker, lw=3.0, markersize=8, ls=ls,
                                 color=color, label=(label if legend_panel else None), **kw)
             ax.grid(True, alpha=0.3)
             ax.set_ylim(0, 1.0)
@@ -190,11 +193,11 @@ def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | N
             if i == len(datasets) - 1:
                 ax.set_xlabel(r"$\tau$")
             if j == 0:
-                ax.set_ylabel(ds_lbl + "\nutility", fontsize=16)
+                ax.set_ylabel(ds_lbl + "\nutility", fontsize=19)
             if i == 0:
-                ax.set_title(m_lbl, fontsize=15)
+                ax.set_title(m_lbl, fontsize=18)
             if legend_panel:
-                ax.legend(fontsize=12, loc="upper right")
+                ax.legend(fontsize=15, loc="upper right")
 
     fig.tight_layout()
     return _save(fig, figures_dir, "h3_temperature")
