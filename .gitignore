@@ -34,3 +34,5 @@ scripts/_common.sh
 scripts/build_appendix.py
 scripts/report_compute_approx.py
 scripts/reverify_from_cache.py
+# Claude Code CLI settings — local-only, contains absolute paths
+.claude/

@@ -126,7 +126,7 @@ deepseek-v4-flash:
   api_key_env: "DS_API_KEY"
   notes: "DeepSeek V4 Flash via official metered API (no quota cap). Pinned version => reproducible. Reasoning model: answer lands in message.content (ApiRunner reads it); needs high max_tokens (>=16000) so hard-problem reasoning finishes before emitting boxed answer. H5 API subject (H1/H3 only)."
 
-# === 70B-scale subjects (server B, 4x A800-80GB, TP=4) ===
+# === 70B-scale subjects (4x A800-80GB host, TP=4) ===
 # Run with --tp 4. Disk holds one ~140 GB model at a time (176 GB volume),
 # so the H2 Tülu-70B trajectory rotates (download -> run -> delete).
 # qwen2.5-72b is the single non-H2 subject (H1/H3/H4/H5 + preference H1/H3).
@@ -137,7 +137,7 @@ qwen2.5-72b-instruct:
   size_b: 72.0
   prompt_mode: "chat"
   supports_system_prompt: true
-  notes: "70B-scale single subject for all non-H2 experiments on server B (TP=4). ~145 GB bf16."
+  notes: "70B-scale single subject for all non-H2 experiments (TP=4). ~145 GB bf16."
 
 qwen2.5-72b-instruct-awq:
   # AWQ INT4 single-GPU variant for HumanEval-72B: INT8 OOM'd on the activation

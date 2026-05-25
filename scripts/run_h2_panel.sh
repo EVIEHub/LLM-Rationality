@@ -4,7 +4,7 @@
 # livecodebench), preference (ultrafeedback, alpaca_eval).
 #
 # Merges the former development_exp / h5_exp / preference_exp H2 panels.
-# Stages run SEQUENTIALLY with disk rotation (a tight autodl-tmp volume
+# Stages run SEQUENTIALLY with disk rotation (a tight scratch volume
 # cannot hold all stage weights at once): download stage -> run all its
 # datasets -> delete weights -> next stage. Preference cells use the fixed
 # Tülu-3-RLVR judge inside scripts.run_h2 (held constant across stages).

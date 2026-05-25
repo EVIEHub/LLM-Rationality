@@ -395,7 +395,7 @@ def main() -> None:
         # overrides it with any models.yaml alias (e.g. an independent
         # Qwen2.5-14B for a judge-robustness re-run).
         # NOTE: 8B RLVR default; for 70B self-judge this would need the 70B
-        # RLVR. Server B uses --judge api, so this path is unused there.
+        # RLVR. The 70B trajectory uses --judge api, so this path is unused there.
         if args.judge_local_model:
             judge_hf_id = models_cfg[args.judge_local_model]["hf_id"]
         else:

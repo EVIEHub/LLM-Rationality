@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 #
 # 429 is handled separately by `_is_retryable_429`: the same HTTP code is
 # returned for two very different conditions on quota-capped proxies (e.g.
-# chivier's ChatGPT-account gateway used by gpt-5.2-chat / gpt-5.5):
+# a third-party ChatGPT-account gateway used by gpt-5.2-chat / gpt-5.5):
 #   - "API_KEY_QUOTA_EXHAUSTED" (daily account quota used up): NOT retryable —
 #     retrying floods the proxy with rejected requests and trips its
 #     anti-abuse, disabling the key (HTTP 401 API_KEY_DISABLED).

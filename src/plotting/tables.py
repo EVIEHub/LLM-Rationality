@@ -122,7 +122,7 @@ H2_DATASETS = [
     ("livecodebench", "LiveCB"),
 ]
 H2_STAGES = [("sft", "SFT"), ("dpo", "DPO"), ("rlvr", "RLVR")]
-# Tulu-70B trajectory (server B; deployment only). Cells may still be
+# Tulu-70B trajectory (deployment-only scope). Cells may still be
 # landing — missing entries render as \na.
 H2_70B_STAGES = [
     ("tulu3-70b-sft", "SFT"),
