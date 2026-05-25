@@ -28,3 +28,9 @@ drafts/
 AGENT/
 
 archive/
+
+# Local-only helper scripts (kept on disk but not shipped with the repo)
+scripts/_common.sh
+scripts/build_appendix.py
+scripts/report_compute_approx.py
+scripts/reverify_from_cache.py
