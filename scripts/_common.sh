@@ -8,8 +8,9 @@
 #   - rg_activate_env          : activates the conda env named in CONDA_ENV
 #                                (default: rg-gap), if conda is on PATH.
 #   - rg_setup_hf              : sets HF_HOME and (optionally) HF_ENDPOINT.
-#   - rg_outputs_root          : echoes the outputs root (OUTPUTS_ROOT env var
-#                                or ./outputs relative to repo root).
+#   - rg_outputs_root          : echoes the outputs root (OUTPUTS_ROOT env var,
+#                                configs/paths.yaml, or ./outputs relative to
+#                                repo root).
 #   - rg_log_dir               : echoes the per-cell log dir.
 #   - rg_log "msg"             : timestamped echo for orchestrator logs.
 #
@@ -87,7 +88,8 @@ Environment variables (all optional):
                      'conda' is not on PATH (caller is assumed to have
                      activated the right environment already).
   OUTPUTS_ROOT       Root for results, sample caches, run logs.
-                     Default: ./outputs (relative to repo root).
+                     Default: configs/paths.yaml outputs_root if present,
+                     else ./outputs relative to repo root.
   LOG_DIR            Per-cell log dir.
                      Default: \$OUTPUTS_ROOT/logs.
   HF_HOME            Hugging Face cache root.
@@ -155,7 +157,32 @@ rg_outputs_root() {
     # Resolve relative to the repo root (parent of scripts/).
     local repo_root
     repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-    echo "${OUTPUTS_ROOT:-$repo_root/outputs}"
+    if [ -n "${OUTPUTS_ROOT:-}" ]; then
+        echo "$OUTPUTS_ROOT"
+        return
+    fi
+    local paths_yaml="$repo_root/configs/paths.yaml"
+    if [ -f "$paths_yaml" ] && command -v python >/dev/null 2>&1; then
+        local configured
+        configured="$(python - "$paths_yaml" <<'PY' 2>/dev/null || true
+import pathlib
+import sys
+
+import yaml
+
+path = pathlib.Path(sys.argv[1])
+data = yaml.safe_load(path.read_text()) or {}
+root = data.get("outputs_root")
+if root:
+    print(pathlib.Path(str(root)).expanduser())
+PY
+)"
+        if [ -n "$configured" ]; then
+            echo "$configured"
+            return
+        fi
+    fi
+    echo "$repo_root/outputs"
 }
 
 rg_log_dir() {

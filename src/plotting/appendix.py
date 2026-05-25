@@ -207,17 +207,26 @@ def build_B4_gpu_hours(results_dir: Path, seed: int = 0) -> str:
 
     lines = [
         r"\begin{table}[htbp]", r"\centering", r"\small",
-        r"\caption{GPU-hour breakdown for the sampling stage. "
-        r"Verification (CPU) and bootstrap (CPU) wall-time are not "
-        r"included. For H1, H2, H4 the wall-clock comes from each "
-        r"cell's \texttt{sampling\_seconds} field; for H3 the cell "
-        r"runner does not log per-cell timing, so we fall back to "
-        r"the global \texttt{compute\_budget.jsonl} append-log "
-        r"(merged across the two sampling servers, dedup'd by "
-        r"(experiment, seed)). H3 cache-hit cells (the $\tau{=}1$ "
-        r"direct cells and the SC bootstraps re-use the H1 cache) "
-        r"do not appear in \texttt{compute\_budget.jsonl} and "
-        r"correctly contribute $0$ incremental GPU-hours.}",
+        r"\caption{GPU-hour breakdown for the sampling stage "
+        r"(\emph{incremental} cost; cache hits across hypotheses are "
+        r"counted only once, against whichever hypothesis first "
+        r"populated the cache). Verification (CPU) and bootstrap (CPU) "
+        r"wall-time are not included. For H1, H2, H4 the wall-clock "
+        r"comes from each cell's \texttt{sampling\_seconds} field; "
+        r"for H3 the cell runner does not log per-cell timing, so we "
+        r"fall back to the global \texttt{compute\_budget.jsonl} "
+        r"append-log (merged across both sampling servers, dedup'd by "
+        r"(experiment, seed)). H2 looks small because (i) the H2 "
+        r"\textbf{Tülu-3-8B-RLVR} cells re-use the H1 RLVR sample "
+        r"cache hit-for-hit (the H1 RLVR sampling, $\approx 2.45$~hr, "
+        r"is counted once under H1), and (ii) the H2 "
+        r"\textbf{Tülu-3-70B} trajectory currently covers only the "
+        r"two deployment datasets (LiveCodeBench, MathArena); "
+        r"extending it to the dev panel would add an estimated "
+        r"$15\text{--}25$~GPU-hr per 70B stage. The H3 cache-hit "
+        r"cells (the $\tau{=}1$ direct cells and SC bootstraps re-use "
+        r"the H1 cache) do not appear in \texttt{compute\_budget.jsonl} "
+        r"and correctly contribute $0$ incremental GPU-hours.}",
         r"\label{tab:appendix_gpu_hours}",
         r"\begin{tabular}{lrrrl}", r"\toprule",
         r"Hypothesis & Cells & w/ timing & GPU-hr & Source \\",
@@ -242,9 +251,18 @@ def build_B4_gpu_hours(results_dir: Path, seed: int = 0) -> str:
 # ======================================================================
 def build_C1_saturation(results_dir: Path, seed: int = 0,
                         models=HEADLINE_MODELS,
-                        datasets=HEADLINE_DATASETS) -> str:
+                        datasets=HEADLINE_DATASETS,
+                        heatmap: bool = True) -> str:
     """Per-(model, dataset) saturation-curve table: 3 metrics x 7 $K$ values
-    with the 95% prompt-bootstrap CI on RVR at $K_{\\max}$."""
+    with the 95% prompt-bootstrap CI on RVR at $K_{\\max}$.
+
+    With ``heatmap=True`` (default) each cell carries an
+    anchor-coloured ``\\cellcolor{}`` whose intensity is proportional
+    to the value (same `_shade` helper as the H1 main-text tables);
+    REU rows are tinted ``colREU``, AEU rows ``colAEU``, RVR rows
+    ``colRVR``.
+    """
+    from src.plotting.tables import _shade  # local import to avoid cycle
     idx = _cell_index(results_dir, seed)
 
     lines = [
@@ -253,9 +271,11 @@ def build_C1_saturation(results_dir: Path, seed: int = 0,
         r"\caption{Saturation curves for the headline H1 cells. Each entry "
         r"is the prompt-mean at the given budget $K'$; the last column's "
         r"$\hat{\mathcal R}_K$ row carries the 95\% prompt-bootstrap CI "
-        r"(B$=$1000 resamples).}",
+        r"(B$=$1000 resamples). Cells are auto-coloured by value "
+        r"(\texttt{colREU}/\texttt{colAEU}/\texttt{colRVR} from the "
+        r"H1 main-text colour scheme; intensity $\propto$ value).}",
         r"\label{tab:appendix_saturation}",
-        r"\begin{tabular}{lll *{7}{r}}", r"\toprule",
+        r"\begin{tabular}{lll *{7}{c}}", r"\toprule",
     ]
     # Determine column grid from first available cell.
     K_grid = None
@@ -272,6 +292,9 @@ def build_C1_saturation(results_dir: Path, seed: int = 0,
                  + " & ".join(f"$K{{=}}{k}$" for k in K_grid) + r" \\")
     lines.append(r"\midrule")
 
+    def _cell(value: float, anchor: str) -> str:
+        return _shade(anchor, value, heatmap) + _fmt(value, 3)
+
     for m, m_disp in models:
         for di, (ds, ds_disp) in enumerate(datasets):
             rec = idx.get((m, ds))
@@ -286,25 +309,20 @@ def build_C1_saturation(results_dir: Path, seed: int = 0,
             m_cell = (r"\multirow{%d}{*}{%s}" % (len(datasets) * 3, m_disp)) \
                      if di == 0 else ""
             ds_cell = r"\multirow{3}{*}{%s}" % ds_disp
-            # 3 rows per (model, dataset)
-            for ri, (label, key, with_ci) in enumerate([
-                (r"$U^\circ_K$", "U_circ_K", False),
-                (r"$\bar U_K$", "U_bar_K", False),
-                (r"$\hat{\mathcal R}_K$", "R_hat_K", True),
+            # 3 rows per (model, dataset). Each ``anchor`` is the
+            # colour ramp used as background.
+            for ri, (label, key, anchor, with_ci) in enumerate([
+                (r"$U^\circ_K$",            "U_circ_K", "colREU", False),
+                (r"$\bar U_K$",             "U_bar_K",  "colAEU", False),
+                (r"$\hat{\mathcal R}_K$",   "R_hat_K",  "colRVR", True),
             ]):
-                vals = " & ".join(
-                    _fmt(curve.get(k, {}).get(key, 0.0), 3) if k in curve else r"\na"
-                    for k in K_grid
-                )
-                # only the RVR row at K_max gets the CI annotation
-                if with_ci and ci_str:
-                    # tack the CI onto the rightmost (K_max) column
-                    vals = " & ".join(
-                        (_fmt(curve.get(k, {}).get(key, 0.0), 3) +
-                         (ci_str if (k == K_grid[-1]) else ""))
-                        if k in curve else r"\na"
-                        for k in K_grid
-                    )
+                def _format_cell(k):
+                    if k not in curve:
+                        return r"\na"
+                    v = curve[k].get(key, 0.0)
+                    suffix = ci_str if (with_ci and k == K_grid[-1] and ci_str) else ""
+                    return _cell(v, anchor) + suffix
+                vals = " & ".join(_format_cell(k) for k in K_grid)
                 head_m = m_cell if ri == 0 and di == 0 else ""
                 head_ds = ds_cell if ri == 0 else ""
                 lines.append(f"{head_m} & {head_ds} & {label} & {vals} \\\\")

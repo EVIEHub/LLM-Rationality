@@ -1,7 +1,7 @@
 \begin{table}[htbp]
 \centering
 \small
-\caption{GPU-hour breakdown for the sampling stage. Verification (CPU) and bootstrap (CPU) wall-time are not included. For H1, H2, H4 the wall-clock comes from each cell's \texttt{sampling\_seconds} field; for H3 the cell runner does not log per-cell timing, so we fall back to the global \texttt{compute\_budget.jsonl} append-log (merged across the two sampling servers, dedup'd by (experiment, seed)). H3 cache-hit cells (the $\tau{=}1$ direct cells and the SC bootstraps re-use the H1 cache) do not appear in \texttt{compute\_budget.jsonl} and correctly contribute $0$ incremental GPU-hours.}
+\caption{GPU-hour breakdown for the sampling stage (\emph{incremental} cost; cache hits across hypotheses are counted only once, against whichever hypothesis first populated the cache). Verification (CPU) and bootstrap (CPU) wall-time are not included. For H1, H2, H4 the wall-clock comes from each cell's \texttt{sampling\_seconds} field; for H3 the cell runner does not log per-cell timing, so we fall back to the global \texttt{compute\_budget.jsonl} append-log (merged across both sampling servers, dedup'd by (experiment, seed)). H2 looks small because (i) the H2 \textbf{Tülu-3-8B-RLVR} cells re-use the H1 RLVR sample cache hit-for-hit (the H1 RLVR sampling, $\approx 2.45$~hr, is counted once under H1), and (ii) the H2 \textbf{Tülu-3-70B} trajectory currently covers only the two deployment datasets (LiveCodeBench, MathArena); extending it to the dev panel would add an estimated $15\text{--}25$~GPU-hr per 70B stage. The H3 cache-hit cells (the $\tau{=}1$ direct cells and SC bootstraps re-use the H1 cache) do not appear in \texttt{compute\_budget.jsonl} and correctly contribute $0$ incremental GPU-hours.}
 \label{tab:appendix_gpu_hours}
 \begin{tabular}{lrrrl}
 \toprule
@@ -10,9 +10,9 @@ Hypothesis & Cells & w/ timing & GPU-hr & Source \\
 H1 & 42 & 42 & 25.3 & \texttt{per-cell} \\
 H2 & 33 & 33 & 7.7 & \texttt{per-cell} \\
 H3 & 140 & 0 & 20.0 & \texttt{compute\_budget} \\
-H4 & 28 & 28 & 9.2 & \texttt{per-cell} \\
+H4 & 68 & 68 & 23.8 & \texttt{per-cell} \\
 \midrule
-\textbf{Total} & 243 & 103 & 62.2 & \\
+\textbf{Total} & 283 & 143 & 76.7 & \\
 \bottomrule
 \end{tabular}
 \end{table}

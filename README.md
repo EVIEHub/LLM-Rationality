@@ -1,234 +1,155 @@
-# In LLM Reasoning, there is a Rational Gap on top of Value Misalignment
+# Rational Gap of LLM Reasoning
 
-Significant progress have been made to align LLMs with a value function. We argue that, even when an LLM has been well aligned in (post-)training, it may still fail to take actions that best maximize the aligned value - on top of the value misalignment error, a rational gap exists, echoing recent rationality theory for reinforcement learning. Extensive experiments well support our argument.
+Reproducibility code for the paper *"In LLM Reasoning, there is a Rational Gap on top of Value Misalignment"*.
 
-## Overview
-
-The rational gap of a policy $\pi_\theta$ is defined as the discrepancy between the utility achievable within the model's reachable distribution and the utility actually realised under sampling-based inference:
+We measure how much of an aligned LLM's apparent value-shortfall is **reachable** by its current policy but **unrealised** under inference. Formally, with $K$ samples per prompt:
 
 $$
-\mathcal{R}(\pi_\theta) = \mathbb{E}_{x \sim \rho}\Big[ U(x, y_\theta^\circ) - \mathbb{E}_{y \sim \pi_\theta(\cdot|x)} U(x, y) \Big].
+\widehat{\mathcal{R}}_K(\pi_\theta) \;=\; \tfrac{1}{N}\!\sum_{i=1}^N \max_{k\in[K]} U(x_i,y_{i,k}) \;-\; \tfrac{1}{NK}\!\sum_{i=1}^{N}\!\sum_{k=1}^{K} U(x_i,y_{i,k}).
 $$
 
-Empirically, we estimate it by sampling $K$ trajectories per prompt and computing
+Hypotheses:
+- **H1** — saturation curve $\widehat{\mathcal{R}}_K$ vs $K$ across open models on math/code/preference tasks
+- **H2** — Tülu-3 trajectory (SFT → DPO → RLVR) at 8B and 70B
+- **H3** — inference procedures (direct $\tau$-sweep, self-consistency)
+- **H4** — reasoning-budget sweep $L \in \{0,64,128,256,512,1024,2048\}$
+- **H5** — closed-weight frontier APIs (gpt-5.2-chat, gpt-5.5, deepseek-v4-flash) on deployment datasets
 
-$$
-\widehat{\mathcal{R}}_K(\pi_\theta) = \frac{1}{N}\sum_{i=1}^{N} \max_{k \in [K]} U(x_i, y_{i,k}) - \frac{1}{NK}\sum_{i=1}^{N}\sum_{k=1}^{K} U(x_i, y_{i,k}).
-$$
-
-This repository computes $\widehat{\mathcal{R}}_K$ across models, datasets, alignment stages, inference procedures, and prompt difficulty levels, in support of the paper's four hypotheses.
-
-## Repository Structure
-
-```
-rational_gap/                       # this repository (code only)
-├── configs/                        # experiment and path configuration
-│   ├── paths.template.yaml         # template for local output paths
-│   ├── models.yaml                 # model registry
-│   ├── datasets.yaml               # dataset registry and prompt templates
-│   └── experiments/
-│       ├── h1.yaml                 # existence
-│       ├── h2.yaml                 # independency of value alignment
-│       ├── h3.yaml                 # benefits of reasoning mechanisms
-│       └── h4.yaml                 # relationship with context length
-├── src/
-│   ├── sampling/                   # vLLM-based sampling layer
-│   ├── verification/               # GSM8K / MATH / HumanEval verifiers
-│   ├── metrics/                    # rational gap and decomposition
-│   ├── pipeline/                   # measurement loop, cache, logging
-│   └── plotting/                   # figures and tables
-├── scripts/                        # entry-point shell scripts per H
-├── tests/                          # unit tests for verifiers
-└── requirements.txt
-```
-
-All runtime outputs are written **outside** this repository, to a directory configured in `configs/paths.yaml`:
-
-```
-rational_gap_outputs/               # outputs (NOT in git)
-├── data/
-│   ├── raw/                        # downloaded datasets
-│   └── samples/                    # cached trajectories (gzipped JSONL)
-├── results/
-│   ├── h1/ h2/ h3/ h4/             # computed metrics (JSON)
-│   └── figures/                    # rendered figures (PDF/PNG)
-└── logs/
-    ├── runs/                       # per-run human-readable logs
-    ├── errors/                     # exception traces
-    ├── verifier/                   # per-sample verifier audit logs
-    └── compute_budget.jsonl        # cumulative GPU-hour log
-```
-
-## Installation
-
-### Requirements
-
-- Python 3.10+
-- CUDA 12.1+ (for vLLM)
-- 80GB GPU memory (tested on NVIDIA A800 80GB; smaller GPUs supported for ≤7B models)
-
-### Setup
+## Quick start
 
 ```bash
-git clone https://github.com/<user>/rational_gap.git
-cd rational_gap
+git clone <repo-url> rational-gap && cd rational-gap
 
-# Create environment
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+# 1. one-shot install (creates conda env "rg-gap", installs PyTorch + vLLM, runs tests)
+#    Optional: set OUTPUTS_ROOT=/path/with/20GB before setup.
+bash scripts/setup.sh
 
-# Configure local paths
-cp configs/paths.template.yaml configs/paths.yaml
-# Edit configs/paths.yaml to point to your outputs directory
+# 2. configure local outputs path (~20 GB free), if you did not set OUTPUTS_ROOT
+${EDITOR:-vim} configs/paths.yaml    # set outputs_root
+
+# 3. smoke test (~3 min on a single small GPU)
+python -m scripts.smoke_test
+
+# 4. full reproduction (~85 GPU-hours on 1×A800-80GB; run inside tmux)
+bash scripts/run_all.sh --num-gpus $(nvidia-smi -L | wc -l)
 ```
 
-### Configuring `paths.yaml`
+## Per-hypothesis scripts
 
-The file `configs/paths.yaml` (gitignored) tells the code where to write samples, results, and logs. A typical setting:
+All accept `--num-gpus N` (H5 ignores it because it is API-only). Result JSONs land under `${outputs_root}/results/`; H5 writes its H1/H3 cells into `results/h1/` and `results/h3/`.
 
-```yaml
-outputs_root: "/data/your_username/rational_gap_outputs"
-samples_dir: "${outputs_root}/data/samples"
-results_dir: "${outputs_root}/results"
-raw_data_dir: "${outputs_root}/data/raw"
-logs_dir: "${outputs_root}/logs"
+| Hypothesis | Script | Coverage | ~Time on 1×A800 |
+|---|---|---|---|
+| H1 saturation | `bash scripts/run_h1_panel.sh` | 3 open 8B models × 7 datasets | ~25 h |
+| H2 trajectory | `bash scripts/run_h2_panel.sh` | Tülu-3 SFT/DPO/RLVR × {8B, 70B} × dev+deployment+preference | ~15 h (8B) + ~15 h (70B if `STAGES="tulu3-70b-sft tulu3-70b-dpo tulu3-70b-rlvr"`) |
+| H3 procedures | `bash scripts/run_h3_panel.sh` | 3 models × 7 datasets × {direct τ=0/0.7/1.0, sc n=2…32} | ~15 h |
+| H4 reasoning budget | `bash scripts/run_h4_panel.sh` | 1 model × 4 datasets × 7 L values (default `MODEL=tulu3-8b-rlvr`) | ~20 h |
+| H5 API panel | `bash scripts/run_h5_panel.sh` | 3 hosted models × {matharena, livecodebench} × H1+H3 | depends on quota |
+
+H5 is opt-in (`RUN_H5=1 bash scripts/run_all.sh`) — needs API credentials in `~/.config/rg-gap.env`:
+
+```
+TP_BASE_URL=…   TP_API_KEY=…        # chivier proxy (gpt-5.x)
+DS_BASE_URL=…   DS_API_KEY=…        # DeepSeek official metered API
+HF_TOKEN=…                          # for gated meta-llama models
 ```
 
-The output directory should have at least 20 GB of free space for the full set of experiments.
+## Outputs
 
-## Quick Start
+All runtime data is written **outside** the repo, to `outputs_root` in `configs/paths.yaml`:
 
-A minimal end-to-end run on a small model and dataset to verify the pipeline:
+```
+${outputs_root}/
+├── data/samples/           # cached trajectories (v2_<ds>_<model>_K<K>_<fp>.jsonl.gz)
+├── data/samples/apiresume_*.jsonl    # per-(prompt, k) API resume cache
+├── results/h{1,2,3,4}/     # computed metrics (JSON); H5 API cells reuse h1/h3
+└── logs/{runs,verifier}/   # per-run logs + per-decision audit trail
+```
+
+Sampling is idempotent: cache-hit cells skip generation and only re-verify.
+
+## Configuration
+
+### `configs/paths.yaml` (gitignored)
+Single source of truth for output paths. See `paths.template.yaml`.
+
+### `configs/models.yaml`
+Model registry. Each entry has `hf_id`, `family`, `prompt_mode`, and (for API models) `api_base_url_env` + `api_key_env`. Add a model by appending one entry.
+
+### `configs/datasets.yaml`
+Dataset registry. Includes the verifier choice (`gsm8k`, `math`, `humaneval`, `livecodebench`, `matharena`, `bbh`, `self_judge`).
+
+### Env vars (read by `_common.sh` / `vllm_runner.py`)
+
+| Var | Effect | When to use |
+|---|---|---|
+| `RG_TP=N` | tensor-parallel size | 70B-scale models |
+| `RG_PP=N` | pipeline-parallel size | PCIe-only multi-GPU box |
+| `RG_DISABLE_CUSTOM_AR=1` | NCCL fallback for all-reduce | TP all-reduce CUDA bug (72B HumanEval) |
+| `RG_MAX_NUM_SEQS=N` | smaller vLLM batch | **Use sparingly** — small values can hang vLLM scheduling |
+| `RG_KV_DTYPE=fp8_e4m3` | half-precision KV cache | long-budget cells OOMing (e.g. 8B + L=2048 + K=64). May fail on some vllm-dev builds with a Triton `CompilationError`; fall back to `RG_SWAP_SPACE_GB`. |
+| `RG_SWAP_SPACE_GB=32` | grow vLLM CPU swap pool from the 4 GiB default | long-budget cells when fp8 KV is unavailable — GPU spills to CPU instead of OOMing |
+| `VLLM_ATTENTION_BACKEND=XFORMERS` | switch from FlashAttention | dodging FlashAttn kernel bugs (deterministic crashes at specific prompts) |
+| `HF_ENDPOINT=https://hf-mirror.com` | HF mirror | clusters without direct huggingface.co access |
+
+## Tests
 
 ```bash
-python -m scripts.smoke_test --model qwen-1.5b --dataset gsm8k --num-prompts 50 --K 4
+pytest tests/ -q          # full baseline after setup.sh installs vLLM/transformers
 ```
 
-This samples 4 trajectories per prompt for 50 GSM8K prompts and prints the empirical rational gap. Total runtime should be under 5 minutes.
+Three verifiers: `src/verification/{gsm8k,math,humaneval,livecodebench,matharena,bbh,self_judge,api_judge}.py`. Each call is appended to `${outputs_root}/logs/verifier/` for post-hoc audit.
 
-## Running Experiments
+### Tested environments
 
-Each hypothesis has a dedicated entry script. Outputs are deterministic given the same seed and configuration.
+| Component | `setup.sh` default (cu124) | Original-run rg-gap env (cu121) |
+|---|---|---|
+| Python | 3.11 | 3.11 |
+| torch | 2.5.1 + cu124 wheels | 2.4.0 + cu121 wheels |
+| vllm | 0.6.3 | 0.6.3 |
+| transformers | 4.45.2 | 4.45.2 |
 
-### Calibration of $K$
-
-Before running the main experiments, determine the appropriate sampling budget:
-
+Both are confirmed working. For exact reproduction of the original run, use the cu121 toolchain:
 ```bash
-bash scripts/run_calibration.sh
+PYTORCH_INDEX=https://download.pytorch.org/whl/cu121 bash scripts/setup.sh
 ```
 
-This evaluates Tülu-3-8B on a 200-prompt GSM8K subset at $K \in \{1, 4, 16, 64, 256, 1024\}$ and reports $\hat{\mathcal{R}}_K$ alongside GPU-hour cost. The smallest $K$ achieving sufficient saturation is then used as the default in subsequent experiments (default `K=64`).
+## Repository layout
 
-### H1: Existence
-
-```bash
-bash scripts/run_h1.sh
+```
+src/
+├── sampling/        # vllm_runner (local), api_runner (hosted), retry policy
+├── verification/    # one verifier per dataset + self_judge + api_judge
+├── metrics/         # rational_gap (U_circ, U_bar, R_hat) + bootstrap CI
+├── pipeline/        # paths, cache, logging, audit
+└── plotting/        # plot_h{1,2,3,4}, tables, appendix
+scripts/             # run_h{1,2,3,4,5}_panel.sh + run_all.sh + setup.sh + reverify_from_cache.py
+configs/             # paths.yaml, models.yaml, datasets.yaml
+tests/               # verifier unit tests
+archive/             # operational wrappers from the original run (study-specific)
 ```
 
-Measures $\hat{\mathcal{R}}_K$ across (Tülu-3-8B, Qwen-2.5-7B-Instruct, Llama-3.1-8B-Instruct) × (GSM8K, MATH, HumanEval), with three random seeds.
+The `archive/server_b_operational/` directory keeps wrapper scripts used during the original run (70B trajectory orchestration, splice intercepts, API retries, etc.) — useful as worked examples but not part of the reproduction path.
 
-### H2: Independency of value alignment
+## Troubleshooting
 
-```bash
-bash scripts/run_h2.sh
-```
-
-Compares base model of Llama-3.1-8B and Tülu-3-8B at three post-training stages (SFT, DPO, RLVR) on GSM8K and MATH.
-
-### H3: Benefits of reasoning mechanisms
-
-```bash
-bash scripts/run_h3.sh
-```
-
-Holds $\pi_\theta$ fixed at Tülu-3-8B and evaluates five inference mechanisms: direct sampling at $\tau \in \{0, 0.7, 1.0\}$, CoT prompting, self-consistency over 8 CoT samples, MCTS with budget-matched search, and oracle Best-of-$N$ ($N=64$).
-
-### H4: Relationship with context length
-
-```bash
-bash scripts/run_h4.sh
-```
-
-Holds $\pi_\theta$ fixed at Tülu-3-8B and varies the maximum reasoning length $L \in \{0, 64, 128, 256, 512, 1024, 2048\}$ tokens on MATH and GSM8K via two-stage budget forcing, characterising how $\hat{\mathcal{R}}_K(L)$ evolves with the reasoning budget allocated at inference.
-
-### Generating Figures
-
-After all experiments complete:
-
-```bash
-python -m src.plotting.generate_all
-```
-
-Figures and tables are written to `${outputs_root}/results/figures/`.
-
-## Reproducing Paper Results
-
-To reproduce all main results from scratch:
-
-```bash
-bash scripts/run_calibration.sh   # ~10 GPU-hours
-bash scripts/run_h1.sh            # ~25 GPU-hours
-bash scripts/run_h2.sh            # ~15 GPU-hours
-bash scripts/run_h3.sh            # ~15 GPU-hours
-bash scripts/run_h4.sh            # ~20 GPU-hours
-python -m src.plotting.generate_all
-```
-
-Total: approximately 85 GPU-hours on a single A800 80GB, plus a few minutes for figure generation.
-
-The cumulative GPU-hour budget is logged to `${outputs_root}/logs/compute_budget.jsonl`.
-
-## Caching
-
-Sampling is the expensive step (~95% of runtime). Each sampling configuration—identified by `(model, dataset, K, temperature, seed)`—is cached as a gzipped JSONL file in `${outputs_root}/data/samples/`. Subsequent runs with the same configuration reuse the cache, so iterating on metrics or verifiers does not require resampling.
-
-To force resampling, pass `--no-cache` to any script, or delete the relevant cache file.
-
-## Verification
-
-Three task-specific verifiers are implemented:
-
-- **GSM8K** (`src/verification/gsm8k.py`): extracts the final numeric answer using a chain of fallback regex patterns (`####`, `\boxed{}`, last number) and performs exact match.
-- **MATH** (`src/verification/math.py`): extracts `\boxed{}` content and checks symbolic equivalence with the ground truth via `math-verify` (a SymPy-based equivalence checker robust to common LaTeX variants).
-- **HumanEval** (`src/verification/humaneval.py`): executes the model's completion against the provided unit tests in a sandboxed subprocess with a 5-second timeout.
-
-Every verification decision is logged to `${outputs_root}/logs/verifier/` for post-hoc auditing. The unit test suite in `tests/` covers approximately 60 manually verified cases per dataset.
-
-## Logging
-
-Three categories of logs are written:
-
-- **Run logs** (`logs/runs/`): human-readable timeline of each run, including configuration, cache status, sampling progress, and final metrics.
-- **Verifier logs** (`logs/verifier/`): JSONL audit trail of every verifier decision, supporting the manual inspection of false negatives.
-- **Compute budget** (`logs/compute_budget.jsonl`): cumulative GPU-hour usage per experiment.
-
-## Limitations
-
-The experimental scope is intentionally bounded:
-
-- **Model scale**: 1.5B–14B parameters. Whether the patterns persist at the 70B+ scale is not addressed by these experiments.
-- **Alignment trajectory**: H2 uses the Tülu-3 trajectory only. Conclusions are illustrative of one well-documented post-training pipeline rather than universal across all alignment recipes.
-- **Utility**: all experiments use binary correctness on tasks with verifiable ground truth. Extension to continuous reward functions (e.g., reward models) is left for future work.
-
-These limitations are discussed in the paper.
+- **vLLM hangs at 0 % prompts** — `RG_MAX_NUM_SEQS=N` with small N can deadlock the scheduler; remove the env var.
+- **CUDA illegal memory at a specific prompt** — try `VLLM_ATTENTION_BACKEND=XFORMERS`.
+- **OOM on long-L cells (8B + L=2048 + K=64)** — first try `RG_KV_DTYPE=fp8_e4m3` (halves KV memory). If your vllm build raises a Triton `CompilationError` on the fp8 path, fall back to `RG_SWAP_SPACE_GB=32` (or higher) to give vLLM enough CPU swap to spill KV blocks.
+- **Disk full mid-trajectory (H2-70B)** — the `run_h2_panel.sh` rotation deletes a stage's weights before the next stage downloads. Don't keep stale large models in `${HF_HOME}/hub`.
+- **Lost a deterministic-verifier result (zeroes everywhere)** — `python -m scripts.reverify_from_cache --samples <cache.jsonl.gz> --result <result.json> --dataset <name>` re-runs verification on the cached trajectories without re-sampling.
 
 ## Citation
 
 ```bibtex
-@inproceedings{<key>,
-  title  = {Rationality of LLM Reasoning: A Gap Beyond Value Alignment},
-  author = {<authors>},
-  year   = {<year>},
+@inproceedings{rational-gap-2026,
+  title     = {In LLM Reasoning, there is a Rational Gap on top of Value Misalignment},
+  author    = {<authors>},
+  year      = {2026},
   booktitle = {<venue>},
 }
 ```
 
 ## License
 
-The code is released under the MIT License. The datasets used (GSM8K, MATH, HumanEval) retain their original licenses.
-
-## Contact
-
-For questions about the implementation, please open an issue or contact `<email>`.
+MIT (this code). Datasets retain their original licenses (GSM8K, MATH, HumanEval, MathArena, LiveCodeBench, UltraFeedback, AlpacaEval, BBH).

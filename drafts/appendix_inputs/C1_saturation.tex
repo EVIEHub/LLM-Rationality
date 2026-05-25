@@ -2,47 +2,47 @@
 \centering
 \small
 \setlength{\tabcolsep}{4pt}
-\caption{Saturation curves for the headline H1 cells. Each entry is the prompt-mean at the given budget $K'$; the last column's $\hat{\mathcal R}_K$ row carries the 95\% prompt-bootstrap CI (B$=$1000 resamples).}
+\caption{Saturation curves for the headline H1 cells. Each entry is the prompt-mean at the given budget $K'$; the last column's $\hat{\mathcal R}_K$ row carries the 95\% prompt-bootstrap CI (B$=$1000 resamples). Cells are auto-coloured by value (\texttt{colREU}/\texttt{colAEU}/\texttt{colRVR} from the H1 main-text colour scheme; intensity $\propto$ value).}
 \label{tab:appendix_saturation}
-\begin{tabular}{lll *{7}{r}}
+\begin{tabular}{lll *{7}{c}}
 \toprule
 Model & Dataset & Metric & $K{=}1$ & $K{=}2$ & $K{=}4$ & $K{=}8$ & $K{=}16$ & $K{=}32$ & $K{=}64$ \\
 \midrule
-\multirow{9}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & 0.858 & 0.916 & 0.946 & 0.959 & 0.973 & 0.980 & 0.984 \\
- &  & $\bar U_K$ & 0.858 & 0.861 & 0.861 & 0.861 & 0.863 & 0.861 & 0.861 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.055 & 0.085 & 0.098 & 0.110 & 0.118 & 0.123 $\pm$ 0.012 \\
+\multirow{9}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & \cellcolor{colREU!51}0.858 & \cellcolor{colREU!55}0.916 & \cellcolor{colREU!57}0.946 & \cellcolor{colREU!58}0.959 & \cellcolor{colREU!58}0.973 & \cellcolor{colREU!59}0.980 & \cellcolor{colREU!59}0.984 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!51}0.858 & \cellcolor{colAEU!52}0.861 & \cellcolor{colAEU!52}0.861 & \cellcolor{colAEU!52}0.861 & \cellcolor{colAEU!52}0.863 & \cellcolor{colAEU!52}0.861 & \cellcolor{colAEU!52}0.861 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!3}0.055 & \cellcolor{colRVR!5}0.085 & \cellcolor{colRVR!6}0.098 & \cellcolor{colRVR!7}0.110 & \cellcolor{colRVR!7}0.118 & \cellcolor{colRVR!7}0.123 $\pm$ 0.012 \\
 \cmidrule(l){2-10}
- & \multirow{3}{*}{MATH} & $U^\circ_K$ & 0.682 & 0.786 & 0.846 & 0.896 & 0.928 & 0.948 & 0.967 \\
- &  & $\bar U_K$ & 0.682 & 0.669 & 0.664 & 0.662 & 0.661 & 0.660 & 0.658 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.117 & 0.182 & 0.234 & 0.267 & 0.288 & 0.309 $\pm$ 0.021 \\
+ & \multirow{3}{*}{MATH} & $U^\circ_K$ & \cellcolor{colREU!41}0.682 & \cellcolor{colREU!47}0.786 & \cellcolor{colREU!51}0.846 & \cellcolor{colREU!54}0.896 & \cellcolor{colREU!56}0.928 & \cellcolor{colREU!57}0.948 & \cellcolor{colREU!58}0.967 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!41}0.682 & \cellcolor{colAEU!40}0.669 & \cellcolor{colAEU!40}0.664 & \cellcolor{colAEU!40}0.662 & \cellcolor{colAEU!40}0.661 & \cellcolor{colAEU!40}0.660 & \cellcolor{colAEU!39}0.658 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!7}0.117 & \cellcolor{colRVR!11}0.182 & \cellcolor{colRVR!14}0.234 & \cellcolor{colRVR!16}0.267 & \cellcolor{colRVR!17}0.288 & \cellcolor{colRVR!19}0.309 $\pm$ 0.021 \\
 \cmidrule(l){2-10}
- & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & 0.463 & 0.573 & 0.646 & 0.665 & 0.768 & 0.823 & 0.848 \\
- &  & $\bar U_K$ & 0.463 & 0.445 & 0.398 & 0.355 & 0.362 & 0.381 & 0.398 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.128 & 0.248 & 0.309 & 0.406 & 0.442 & 0.450 $\pm$ 0.051 \\
+ & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & \cellcolor{colREU!28}0.463 & \cellcolor{colREU!34}0.573 & \cellcolor{colREU!39}0.646 & \cellcolor{colREU!40}0.665 & \cellcolor{colREU!46}0.768 & \cellcolor{colREU!49}0.823 & \cellcolor{colREU!51}0.848 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!28}0.463 & \cellcolor{colAEU!27}0.445 & \cellcolor{colAEU!24}0.398 & \cellcolor{colAEU!21}0.355 & \cellcolor{colAEU!22}0.362 & \cellcolor{colAEU!23}0.381 & \cellcolor{colAEU!24}0.398 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!8}0.128 & \cellcolor{colRVR!15}0.248 & \cellcolor{colRVR!19}0.309 & \cellcolor{colRVR!24}0.406 & \cellcolor{colRVR!27}0.442 & \cellcolor{colRVR!27}0.450 $\pm$ 0.051 \\
 \midrule
-\multirow{9}{*}{Qwen2.5-7B-Instruct} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & 0.907 & 0.944 & 0.961 & 0.974 & 0.978 & 0.985 & 0.990 \\
- &  & $\bar U_K$ & 0.907 & 0.904 & 0.907 & 0.907 & 0.906 & 0.907 & 0.906 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.039 & 0.054 & 0.067 & 0.072 & 0.078 & 0.085 $\pm$ 0.010 \\
+\multirow{9}{*}{Qwen2.5-7B-Instruct} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & \cellcolor{colREU!54}0.907 & \cellcolor{colREU!57}0.944 & \cellcolor{colREU!58}0.961 & \cellcolor{colREU!58}0.974 & \cellcolor{colREU!59}0.978 & \cellcolor{colREU!59}0.985 & \cellcolor{colREU!59}0.990 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!54}0.907 & \cellcolor{colAEU!54}0.904 & \cellcolor{colAEU!54}0.907 & \cellcolor{colAEU!54}0.907 & \cellcolor{colAEU!54}0.906 & \cellcolor{colAEU!54}0.907 & \cellcolor{colAEU!54}0.906 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!2}0.039 & \cellcolor{colRVR!3}0.054 & \cellcolor{colRVR!4}0.067 & \cellcolor{colRVR!4}0.072 & \cellcolor{colRVR!5}0.078 & \cellcolor{colRVR!5}0.085 $\pm$ 0.010 \\
 \cmidrule(l){2-10}
- & \multirow{3}{*}{MATH} & $U^\circ_K$ & 0.904 & 0.953 & 0.974 & 0.982 & 0.985 & 0.991 & 0.993 \\
- &  & $\bar U_K$ & 0.904 & 0.901 & 0.903 & 0.900 & 0.898 & 0.897 & 0.898 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.051 & 0.071 & 0.082 & 0.087 & 0.094 & 0.095 $\pm$ 0.013 \\
+ & \multirow{3}{*}{MATH} & $U^\circ_K$ & \cellcolor{colREU!54}0.904 & \cellcolor{colREU!57}0.953 & \cellcolor{colREU!58}0.974 & \cellcolor{colREU!59}0.982 & \cellcolor{colREU!59}0.985 & \cellcolor{colREU!59}0.991 & \cellcolor{colREU!60}0.993 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!54}0.904 & \cellcolor{colAEU!54}0.901 & \cellcolor{colAEU!54}0.903 & \cellcolor{colAEU!54}0.900 & \cellcolor{colAEU!54}0.898 & \cellcolor{colAEU!54}0.897 & \cellcolor{colAEU!54}0.898 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!3}0.051 & \cellcolor{colRVR!4}0.071 & \cellcolor{colRVR!5}0.082 & \cellcolor{colRVR!5}0.087 & \cellcolor{colRVR!6}0.094 & \cellcolor{colRVR!6}0.095 $\pm$ 0.013 \\
 \cmidrule(l){2-10}
- & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & 0.762 & 0.805 & 0.866 & 0.896 & 0.915 & 0.927 & 0.933 \\
- &  & $\bar U_K$ & 0.762 & 0.762 & 0.761 & 0.758 & 0.750 & 0.755 & 0.749 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.043 & 0.105 & 0.138 & 0.165 & 0.172 & 0.184 $\pm$ 0.044 \\
+ & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & \cellcolor{colREU!46}0.762 & \cellcolor{colREU!48}0.805 & \cellcolor{colREU!52}0.866 & \cellcolor{colREU!54}0.896 & \cellcolor{colREU!55}0.915 & \cellcolor{colREU!56}0.927 & \cellcolor{colREU!56}0.933 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!46}0.762 & \cellcolor{colAEU!46}0.762 & \cellcolor{colAEU!46}0.761 & \cellcolor{colAEU!46}0.758 & \cellcolor{colAEU!45}0.750 & \cellcolor{colAEU!45}0.755 & \cellcolor{colAEU!45}0.749 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!3}0.043 & \cellcolor{colRVR!6}0.105 & \cellcolor{colRVR!8}0.138 & \cellcolor{colRVR!10}0.165 & \cellcolor{colRVR!10}0.172 & \cellcolor{colRVR!11}0.184 $\pm$ 0.044 \\
 \midrule
-\multirow{9}{*}{Llama-3.1-8B-Instruct} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & 0.781 & 0.879 & 0.929 & 0.958 & 0.972 & 0.983 & 0.990 \\
- &  & $\bar U_K$ & 0.781 & 0.777 & 0.782 & 0.782 & 0.781 & 0.780 & 0.780 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.102 & 0.147 & 0.176 & 0.191 & 0.203 & 0.210 $\pm$ 0.013 \\
+\multirow{9}{*}{Llama-3.1-8B-Instruct} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & \cellcolor{colREU!47}0.781 & \cellcolor{colREU!53}0.879 & \cellcolor{colREU!56}0.929 & \cellcolor{colREU!57}0.958 & \cellcolor{colREU!58}0.972 & \cellcolor{colREU!59}0.983 & \cellcolor{colREU!59}0.990 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!47}0.781 & \cellcolor{colAEU!47}0.777 & \cellcolor{colAEU!47}0.782 & \cellcolor{colAEU!47}0.782 & \cellcolor{colAEU!47}0.781 & \cellcolor{colAEU!47}0.780 & \cellcolor{colAEU!47}0.780 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!6}0.102 & \cellcolor{colRVR!9}0.147 & \cellcolor{colRVR!11}0.176 & \cellcolor{colRVR!11}0.191 & \cellcolor{colRVR!12}0.203 & \cellcolor{colRVR!13}0.210 $\pm$ 0.013 \\
 \cmidrule(l){2-10}
- & \multirow{3}{*}{MATH} & $U^\circ_K$ & 0.458 & 0.631 & 0.761 & 0.844 & 0.897 & 0.929 & 0.949 \\
- &  & $\bar U_K$ & 0.458 & 0.473 & 0.471 & 0.472 & 0.472 & 0.469 & 0.470 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.158 & 0.290 & 0.372 & 0.425 & 0.460 & 0.479 $\pm$ 0.020 \\
+ & \multirow{3}{*}{MATH} & $U^\circ_K$ & \cellcolor{colREU!27}0.458 & \cellcolor{colREU!38}0.631 & \cellcolor{colREU!46}0.761 & \cellcolor{colREU!51}0.844 & \cellcolor{colREU!54}0.897 & \cellcolor{colREU!56}0.929 & \cellcolor{colREU!57}0.949 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!27}0.458 & \cellcolor{colAEU!28}0.473 & \cellcolor{colAEU!28}0.471 & \cellcolor{colAEU!28}0.472 & \cellcolor{colAEU!28}0.472 & \cellcolor{colAEU!28}0.469 & \cellcolor{colAEU!28}0.470 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!9}0.158 & \cellcolor{colRVR!17}0.290 & \cellcolor{colRVR!22}0.372 & \cellcolor{colRVR!26}0.425 & \cellcolor{colRVR!28}0.460 & \cellcolor{colRVR!29}0.479 $\pm$ 0.020 \\
 \cmidrule(l){2-10}
- & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & 0.476 & 0.561 & 0.689 & 0.726 & 0.780 & 0.817 & 0.848 \\
- &  & $\bar U_K$ & 0.476 & 0.448 & 0.454 & 0.443 & 0.437 & 0.431 & 0.431 \\
- &  & $\hat{\mathcal R}_K$ & 0.000 & 0.113 & 0.235 & 0.283 & 0.343 & 0.386 & 0.417 $\pm$ 0.053 \\
+ & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & \cellcolor{colREU!29}0.476 & \cellcolor{colREU!34}0.561 & \cellcolor{colREU!41}0.689 & \cellcolor{colREU!44}0.726 & \cellcolor{colREU!47}0.780 & \cellcolor{colREU!49}0.817 & \cellcolor{colREU!51}0.848 \\
+ &  & $\bar U_K$ & \cellcolor{colAEU!29}0.476 & \cellcolor{colAEU!27}0.448 & \cellcolor{colAEU!27}0.454 & \cellcolor{colAEU!27}0.443 & \cellcolor{colAEU!26}0.437 & \cellcolor{colAEU!26}0.431 & \cellcolor{colAEU!26}0.431 \\
+ &  & $\hat{\mathcal R}_K$ & \cellcolor{colRVR!0}0.000 & \cellcolor{colRVR!7}0.113 & \cellcolor{colRVR!14}0.235 & \cellcolor{colRVR!17}0.283 & \cellcolor{colRVR!21}0.343 & \cellcolor{colRVR!23}0.386 & \cellcolor{colRVR!25}0.417 $\pm$ 0.053 \\
 \bottomrule
 \end{tabular}
 \end{table*}

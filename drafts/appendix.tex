@@ -14,7 +14,8 @@
 %      \usepackage{booktabs}               % \toprule, \midrule, \bottomrule
 %      \usepackage{multirow}               % \multirow, \multicolumn
 %      \usepackage{array}                  % p{...} column type (tab:decoding)
-%      \usepackage{xcolor}                 % \textcolor (for \PH macro below)
+%      \usepackage[table]{xcolor}          % \textcolor + \cellcolor (table option needed for shaded cells)
+%      \usepackage{colortbl}               % (loaded by xcolor[table]; \cellcolor inside tabular)
 %      \usepackage{listings}               % lstlisting (prompt templates)
 %      \usepackage{microtype}              % typographic spacing
 %      \usepackage{graphicx}               % includegraphics
@@ -41,6 +42,16 @@
 % =====================================================================
 
 \newcommand{\PH}[1]{\textcolor{red!70!black}{\textbf{[#1]}}}
+
+% Anchor colours used by the auto-coloured saturation / H1 tables.
+% \providecolor is a no-op if the main paper has already defined them
+% (e.g. via results_tables_auto.tex's preamble), so this block is
+% safe to keep when the appendix is integrated into the full paper.
+\providecolor{colREU}{HTML}{8FC4DF}      % soft blue
+\providecolor{colAEU}{HTML}{D6A77E}      % muted amber
+\providecolor{colRVR}{HTML}{CC7E9A}      % dusty pink
+\providecolor{colAK}{HTML}{A998DD}       % soft lavender
+\providecolor{colPCTRVR}{HTML}{6F8FE8}
 
 % =====================================================================
 \section{Detailed experimental configuration}
@@ -76,7 +87,7 @@ disabled.}
 \toprule
 Experiment & $\tau$ & top-$p$ & top-$k$ & $K$ & max\_tokens & Notes \\
 \midrule
-H1 (all models, all datasets) & 1.0 & 1.0 & $-1$ & 64 & 1024 & UltraFeedback uses $K=32$, max\_tokens${}=512$ \\
+H1 (all models, all datasets) & 1.0 & 1.0 & $-1$ & 64 & 1024 & UltraFeedback uses $K=32$; max\_tokens${}=512$ for the 8B models, $2048$ for Qwen2.5-72B-Instruct (override on the long-prompt 72B host) \\
 H2 (chat-mode stages)         & 1.0 & 1.0 & $-1$ & 64 & 1024 & Same cache key as H1 for the RLVR stage \\
 H2 (Tülu-3 base, few-shot)    & 1.0 & 1.0 & $-1$ & 64 & 1024 & Few-shot context prepended, see \cref{app:config:prompts} \\
 H3 direct, $\tau{=}0$         & 0.0 & 1.0 & $-1$ & 1  & 1024 & $K{=}1$ enforced; greedy with $K{>}1$ is refused \\
@@ -148,10 +159,26 @@ LiveCodeBench system:
   for input/output if the problem describes them; otherwise complete
   the starter code as specified.
 
-UltraFeedback (preference) system:  (empty string)
-  -- each generator/judge applies its own default system prompt.
+BBH (H4 budget-forced) system:
+  Reason step by step about the following problem. Then state your
+  final answer. For multiple-choice questions answer with the option
+  letter in parentheses, e.g. (A). For yes/no, true/false, or
+  valid/invalid questions answer with exactly that word. For counting
+  questions answer with the number.
 
-User template (all datasets):  "{question}"   or   "{problem}"
+UltraFeedback (preference) system:  (empty string)
+AlpacaEval   (preference) system:  (empty string)
+  -- in both, each generator/judge applies its own default system prompt.
+
+User templates:
+  GSM8K          : "{question}"
+  MATH           : "{problem}"
+  MathArena      : "{problem}"
+  HumanEval      : "{prompt}"
+  LiveCodeBench  : "{question_content}"
+  BBH            : "{input}"
+  UltraFeedback  : "{prompt}"
+  AlpacaEval     : "{instruction}"
 \end{lstlisting}
 
 \paragraph{Few-shot prompts (H2 Tülu-3 base only).}

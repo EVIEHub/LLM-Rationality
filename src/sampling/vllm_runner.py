@@ -81,6 +81,23 @@ class VllmRunner:
         _max_seqs = os.environ.get("RG_MAX_NUM_SEQS")
         if _max_seqs:
             vllm_kwargs.setdefault("max_num_seqs", int(_max_seqs))
+        # RG_KV_DTYPE selects the KV cache dtype (default fp16). Set to "fp8"
+        # to roughly halve KV memory — needed for long-reasoning-budget cells
+        # that otherwise OOM (e.g. Llama-3.1-8B + L=2048 + K=64 + M=60 exceeds
+        # 80 GiB in fp16 even at gpu-memory-utilization=0.90). NOTE: in some
+        # vllm-dev installs the fp8 path triggers a Triton CompilationError;
+        # fall back to RG_SWAP_SPACE_GB if so.
+        _kv_dtype = os.environ.get("RG_KV_DTYPE")
+        if _kv_dtype:
+            vllm_kwargs.setdefault("kv_cache_dtype", _kv_dtype)
+        # RG_SWAP_SPACE_GB grows vllm's CPU swap pool (default 4 GiB). Large
+        # KV demand that doesn't fit on the GPU is spilled to CPU memory; if
+        # the swap pool is too small, the scheduler aborts ("Aborted due to
+        # the lack of CPU swap space"). Set this for long-L cells when fp8
+        # KV is unavailable.
+        _swap_gb = os.environ.get("RG_SWAP_SPACE_GB")
+        if _swap_gb:
+            vllm_kwargs.setdefault("swap_space", int(_swap_gb))
 
         self.hf_id = hf_id
         self._llm: Any | None = LLM(model=hf_id, **vllm_kwargs)

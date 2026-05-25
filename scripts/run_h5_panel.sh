@@ -25,8 +25,13 @@
 set -uo pipefail
 # shellcheck disable=SC1091
 source "$(dirname "$0")/_common.sh"
+rg_parse_num_gpus "$@"; set -- "${RG_POSITIONAL[@]}"
 rg_activate_env; rg_setup_hf
-[ -f /root/.config/rg-gap.env ] && { set -a; source /root/.config/rg-gap.env; set +a; }
+if [ -f "$HOME/.config/rg-gap.env" ]; then
+  set -a; source "$HOME/.config/rg-gap.env"; set +a
+elif [ -f /root/.config/rg-gap.env ]; then
+  set -a; source /root/.config/rg-gap.env; set +a
+fi
 OUTPUTS_ROOT="$(rg_outputs_root)"; LOG_DIR="$(rg_log_dir)"
 mkdir -p "$LOG_DIR" "$OUTPUTS_ROOT/results/h1" "$OUTPUTS_ROOT/results/h3"
 

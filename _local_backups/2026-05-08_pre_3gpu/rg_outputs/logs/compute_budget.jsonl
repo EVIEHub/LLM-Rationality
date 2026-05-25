@@ -1,2 +1,0 @@
-{"timestamp": "2026-05-07T18:45:02.925480+00:00", "experiment": "smoke_qwen2.5-1.5b-instruct_gsm8k", "gpu_hours": 0.01891258829169803, "metadata": {"model": "qwen2.5-1.5b-instruct", "dataset": "gsm8k", "num_prompts": 10, "K": 4, "seed": 0, "stage": "sampling"}}
-{"timestamp": "2026-05-07T19:04:43.096356+00:00", "experiment": "h1_tulu3-8b-rlvr_gsm8k_seed0", "gpu_hours": 0.17848881827460394, "metadata": {"model": "tulu3-8b-rlvr", "dataset": "gsm8k", "num_prompts": 200, "K": 64, "seed": 0, "stage": "sampling"}}
