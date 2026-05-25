@@ -1,71 +1,0 @@
-2026-05-25 03:28:31,397 INFO     __main__: Starting h4_llama3.1-8b-instruct_matharena_L2048_seed0 | L=2048, K=64, num_prompts=60, seed=0
-2026-05-25 03:28:37,705 INFO     __main__: Using 60 prompts
-2026-05-25 03:28:37,706 INFO     __main__: Cache key fingerprint: 93fe875a60cd7675 (L=2048)
-2026-05-25 03:28:37,706 INFO     __main__: Loading tokenizer for meta-llama/Llama-3.1-8B-Instruct
-2026-05-25 03:28:38,395 INFO     __main__: Cache miss — running budget_forced (L=2048)
-/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/connections.py:8: RuntimeWarning: Failed to read commit hash:
-No module named 'vllm._version'
-  from vllm.version import __version__ as VLLM_VERSION
-WARNING 05-25 03:28:44 arg_utils.py:953] Chunked prefill is enabled by default for models with max_model_len > 32K. Currently, chunked prefill might not work with some features or models. If you encounter any issues, please disable chunked prefill by setting --enable-chunked-prefill=False.
-INFO 05-25 03:28:44 config.py:1005] Chunked prefill is enabled with max_num_batched_tokens=512.
-WARNING 05-25 03:28:44 config.py:380] To see benefits of async output processing, enable CUDA graph. Since, enforce-eager is enabled, async output processor cannot be used
-INFO 05-25 03:28:44 llm_engine.py:237] Initializing an LLM engine (vdev) with config: model='meta-llama/Llama-3.1-8B-Instruct', speculative_config=None, tokenizer='meta-llama/Llama-3.1-8B-Instruct', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, override_neuron_config=None, rope_scaling=None, rope_theta=None, tokenizer_revision=None, trust_remote_code=False, dtype=torch.bfloat16, max_seq_len=131072, download_dir=None, load_format=LoadFormat.AUTO, tensor_parallel_size=1, pipeline_parallel_size=1, disable_custom_all_reduce=False, quantization=None, enforce_eager=True, kv_cache_dtype=auto, quantization_param_path=None, device_config=cuda, decoding_config=DecodingConfig(guided_decoding_backend='outlines'), observability_config=ObservabilityConfig(otlp_traces_endpoint=None, collect_model_forward_time=False, collect_model_execute_time=False), seed=0, served_model_name=meta-llama/Llama-3.1-8B-Instruct, use_v2_block_manager=True, num_scheduler_steps=1, chunked_prefill_enabled=True multi_step_stream_outputs=True, enable_prefix_caching=False, use_async_output_proc=False, use_cached_outputs=False, mm_processor_kwargs=None)
-INFO 05-25 03:28:45 model_runner.py:1060] Starting to load model meta-llama/Llama-3.1-8B-Instruct...
-INFO 05-25 03:28:46 weight_utils.py:243] Using model weights format ['*.safetensors']
-Loading safetensors checkpoint shards:   0% Completed | 0/4 [00:00<?, ?it/s]
-Loading safetensors checkpoint shards:  25% Completed | 1/4 [00:00<00:00,  4.87it/s]
-Loading safetensors checkpoint shards:  50% Completed | 2/4 [00:00<00:00,  2.01it/s]
-Loading safetensors checkpoint shards:  75% Completed | 3/4 [00:01<00:00,  1.49it/s]
-Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:02<00:00,  1.37it/s]
-Loading safetensors checkpoint shards: 100% Completed | 4/4 [00:02<00:00,  1.53it/s]
-
-INFO 05-25 03:28:50 model_runner.py:1071] Loading model weights took 14.9888 GB
-INFO 05-25 03:28:50 gpu_executor.py:122] # GPU blocks: 20044, # CPU blocks: 2048
-INFO 05-25 03:28:50 gpu_executor.py:126] Maximum concurrency for 131072 tokens per request: 2.45x
-Processed prompts:   0%|          | 0/60 [00:00<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]WARNING 05-25 03:30:21 scheduler.py:1484] Sequence group 6 is preempted by PreemptionMode.SWAP mode because there is not enough KV cache space. This can affect the end-to-end performance. Increase gpu_memory_utilization or tensor_parallel_size to provide more KV cache memory. total_num_cumulative_preemption=1
-[rank0]: Traceback (most recent call last):
-[rank0]:   File "<frozen runpy>", line 198, in _run_module_as_main
-[rank0]:   File "<frozen runpy>", line 88, in _run_code
-[rank0]:   File "/root/rational-gap-of-LLM-reasoning/scripts/run_h4.py", line 337, in <module>
-[rank0]:     main()
-[rank0]:   File "/root/rational-gap-of-LLM-reasoning/scripts/run_h4.py", line 210, in main
-[rank0]:     samples_list = budget_forced(
-[rank0]:                    ^^^^^^^^^^^^^^
-[rank0]:   File "/root/rational-gap-of-LLM-reasoning/src/sampling/inference_procedures.py", line 84, in budget_forced
-[rank0]:     stage1 = runner.sample(prompts, K=K, seed=seed, config=cfg1)
-[rank0]:              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/rational-gap-of-LLM-reasoning/src/sampling/vllm_runner.py", line 142, in sample
-[rank0]:     request_outputs = self._llm.generate(prompts, params)
-[rank0]:                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/utils.py", line 1063, in inner
-[rank0]:     return fn(*args, **kwargs)
-[rank0]:            ^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/entrypoints/llm.py", line 353, in generate
-[rank0]:     outputs = self._run_engine(use_tqdm=use_tqdm)
-[rank0]:               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/entrypoints/llm.py", line 879, in _run_engine
-[rank0]:     step_outputs = self.llm_engine.step()
-[rank0]:                    ^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/engine/llm_engine.py", line 1339, in step
-[rank0]:     ) = self.scheduler[virtual_engine].schedule()
-[rank0]:         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 1220, in schedule
-[rank0]:     scheduler_outputs: SchedulerOutputs = self._schedule()
-[rank0]:                                           ^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 1177, in _schedule
-[rank0]:     return self._schedule_chunked_prefill()
-[rank0]:            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 1114, in _schedule_chunked_prefill
-[rank0]:     running_scheduled = self._schedule_running(budget,
-[rank0]:                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 605, in _schedule_running
-[rank0]:     preempted_mode = self._preempt(victim_seq_group,
-[rank0]:                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 1496, in _preempt
-[rank0]:     self._preempt_by_swap(seq_group, blocks_to_swap_out)
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 1517, in _preempt_by_swap
-[rank0]:     self._swap_out(seq_group, blocks_to_swap_out)
-[rank0]:   File "/root/miniconda3/envs/rg-gap/lib/python3.11/site-packages/vllm/core/scheduler.py", line 1537, in _swap_out
-[rank0]:     raise RuntimeError(
-[rank0]: RuntimeError: Aborted due to the lack of CPU swap space. Please increase the swap space to avoid this error.
-Processed prompts:   0%|          | 0/60 [01:36<?, ?it/s, est. speed input: 0.00 toks/s, output: 0.00 toks/s]
