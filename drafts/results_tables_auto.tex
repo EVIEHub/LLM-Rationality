@@ -155,42 +155,44 @@ Model & Stage & $1{-}\text{REU}$ & RVR & \%RVR \\
 \end{tabular}
 \end{table}
 
-\begin{table}[t]
+\begin{table*}[t]
 \centering
 \small
-\setlength{\tabcolsep}{5pt}
-\caption{Rational value risk under varying reasoning lengths $T$. Values are reported as mean $\pm$ 95\% bootstrap confidence interval; bold indicates the largest RVR per dataset.}
+\setlength{\tabcolsep}{4pt}
+\caption{Rational value risk under varying reasoning-length budgets $T$, across three open-weight 8B-scale models. Columns are grouped by model; each group reports REU, AEU, and RVR (mean $\pm$ 95\% bootstrap half-width). Cells are auto-coloured by value (\texttt{colREU} / \texttt{colAEU} / \texttt{colRVR}; intensity $\propto$ value); \textbf{bold} marks the largest RVR per (dataset, model).}
 \label{tab:h4}
-\begin{tabular}{ll ccc}
+\begin{tabular}{ll ccc ccc ccc}
 \toprule
-Dataset & $T$ & REU & AEU & RVR \\
+\multirow{2}{*}{Dataset} & \multirow{2}{*}{$T$} & \multicolumn{3}{c}{Tülu-3-8B-RLVR} & \multicolumn{3}{c}{Qwen2.5-7B-Instruct} & \multicolumn{3}{c}{Llama-3.1-8B-Instruct} \\
+\cmidrule(lr){3-5} \cmidrule(lr){6-8} \cmidrule(lr){9-11}
+ & & REU & AEU & RVR & REU & AEU & RVR & REU & AEU & RVR \\
 \midrule
-\multirow{7}{*}{GSM8K} & 0 & \cellcolor{colREU!13}0.222 & \cellcolor{colAEU!9}0.142 & \cellcolor{colRVR!5}0.080\ci{0.024} \\
- & 64 & \cellcolor{colREU!49}0.814 & \cellcolor{colAEU!22}0.358 & \cellcolor{colRVR!27}\best{0.456}\ci{0.034} \\
- & 128 & \cellcolor{colREU!57}0.952 & \cellcolor{colAEU!38}0.637 & \cellcolor{colRVR!19}0.315\ci{0.030} \\
- & 256 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!51}0.848 & \cellcolor{colRVR!8}0.136\ci{0.022} \\
- & 512 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!53}0.876 & \cellcolor{colRVR!6}0.108\ci{0.019} \\
- & 1024 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!52}0.875 & \cellcolor{colRVR!7}0.109\ci{0.019} \\
- & 2048 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!53}0.877 & \cellcolor{colRVR!6}0.107\ci{0.019} \\
+\multirow{7}{*}{GSM8K} & 0 & \cellcolor{colREU!13}0.222 & \cellcolor{colAEU!9}0.142 & \cellcolor{colRVR!5}0.080\ci{0.024} & \cellcolor{colREU!17}0.280 & \cellcolor{colAEU!16}0.262 & \cellcolor{colRVR!1}0.018\ci{0.010} & \cellcolor{colREU!17}0.290 & \cellcolor{colAEU!7}0.115 & \cellcolor{colRVR!10}0.175\ci{0.029} \\
+ & 64 & \cellcolor{colREU!49}0.814 & \cellcolor{colAEU!22}0.358 & \cellcolor{colRVR!27}\best{0.456}\ci{0.034} & \cellcolor{colREU!31}0.516 & \cellcolor{colAEU!14}0.236 & \cellcolor{colRVR!17}0.280\ci{0.034} & \cellcolor{colREU!44}0.738 & \cellcolor{colAEU!10}0.163 & \cellcolor{colRVR!35}\best{0.575}\ci{0.037} \\
+ & 128 & \cellcolor{colREU!57}0.952 & \cellcolor{colAEU!38}0.637 & \cellcolor{colRVR!19}0.315\ci{0.030} & \cellcolor{colREU!44}0.740 & \cellcolor{colAEU!23}0.377 & \cellcolor{colRVR!22}\best{0.363}\ci{0.034} & \cellcolor{colREU!57}0.948 & \cellcolor{colAEU!25}0.421 & \cellcolor{colRVR!32}0.527\ci{0.029} \\
+ & 256 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!51}0.848 & \cellcolor{colRVR!8}0.136\ci{0.022} & \cellcolor{colREU!59}0.982 & \cellcolor{colAEU!45}0.746 & \cellcolor{colRVR!14}0.236\ci{0.027} & \cellcolor{colREU!59}0.990 & \cellcolor{colAEU!45}0.758 & \cellcolor{colRVR!14}0.232\ci{0.025} \\
+ & 512 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!53}0.876 & \cellcolor{colRVR!6}0.108\ci{0.019} & \cellcolor{colREU!60}0.992 & \cellcolor{colAEU!55}0.910 & \cellcolor{colRVR!5}0.082\ci{0.017} & \cellcolor{colREU!60}0.992 & \cellcolor{colAEU!48}0.805 & \cellcolor{colRVR!11}0.187\ci{0.023} \\
+ & 1024 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!52}0.875 & \cellcolor{colRVR!7}0.109\ci{0.019} & \cellcolor{colREU!60}0.992 & \cellcolor{colAEU!55}0.912 & \cellcolor{colRVR!5}0.080\ci{0.016} & \cellcolor{colREU!59}0.988 & \cellcolor{colAEU!48}0.803 & \cellcolor{colRVR!11}0.185\ci{0.022} \\
+ & 2048 & \cellcolor{colREU!59}0.984 & \cellcolor{colAEU!53}0.877 & \cellcolor{colRVR!6}0.107\ci{0.019} & \cellcolor{colREU!60}0.992 & \cellcolor{colAEU!55}0.912 & \cellcolor{colRVR!5}0.080\ci{0.017} & \cellcolor{colREU!60}0.992 & \cellcolor{colAEU!48}0.808 & \cellcolor{colRVR!11}0.184\ci{0.022} \\
 \midrule
-\multirow{7}{*}{MATH} & 0 & \cellcolor{colREU!12}0.204 & \cellcolor{colAEU!9}0.156 & \cellcolor{colRVR!3}0.048\ci{0.016} \\
- & 64 & \cellcolor{colREU!28}0.466 & \cellcolor{colAEU!10}0.164 & \cellcolor{colRVR!18}0.302\ci{0.033} \\
- & 128 & \cellcolor{colREU!38}0.636 & \cellcolor{colAEU!15}0.243 & \cellcolor{colRVR!24}\best{0.393}\ci{0.036} \\
- & 256 & \cellcolor{colREU!49}0.824 & \cellcolor{colAEU!26}0.437 & \cellcolor{colRVR!23}0.387\ci{0.034} \\
- & 512 & \cellcolor{colREU!57}0.946 & \cellcolor{colAEU!38}0.632 & \cellcolor{colRVR!19}0.314\ci{0.029} \\
- & 1024 & \cellcolor{colREU!58}0.970 & \cellcolor{colAEU!41}0.682 & \cellcolor{colRVR!17}0.288\ci{0.028} \\
- & 2048 & \cellcolor{colREU!59}0.976 & \cellcolor{colAEU!41}0.689 & \cellcolor{colRVR!17}0.287\ci{0.028} \\
+\multirow{7}{*}{MATH} & 0 & \cellcolor{colREU!12}0.204 & \cellcolor{colAEU!9}0.156 & \cellcolor{colRVR!3}0.048\ci{0.016} & \cellcolor{colREU!17}0.280 & \cellcolor{colAEU!16}0.266 & \cellcolor{colRVR!1}0.014\ci{0.009} & \cellcolor{colREU!7}0.118 & \cellcolor{colAEU!5}0.080 & \cellcolor{colRVR!2}0.038\ci{0.016} \\
+ & 64 & \cellcolor{colREU!28}0.466 & \cellcolor{colAEU!10}0.164 & \cellcolor{colRVR!18}0.302\ci{0.033} & \cellcolor{colREU!30}0.498 & \cellcolor{colAEU!17}0.277 & \cellcolor{colRVR!13}0.221\ci{0.029} & \cellcolor{colREU!31}0.512 & \cellcolor{colAEU!8}0.130 & \cellcolor{colRVR!23}0.382\ci{0.035} \\
+ & 128 & \cellcolor{colREU!38}0.636 & \cellcolor{colAEU!15}0.243 & \cellcolor{colRVR!24}\best{0.393}\ci{0.036} & \cellcolor{colREU!36}0.592 & \cellcolor{colAEU!18}0.305 & \cellcolor{colRVR!17}0.287\ci{0.030} & \cellcolor{colREU!42}0.698 & \cellcolor{colAEU!14}0.229 & \cellcolor{colRVR!28}\best{0.469}\ci{0.037} \\
+ & 256 & \cellcolor{colREU!49}0.824 & \cellcolor{colAEU!26}0.437 & \cellcolor{colRVR!23}0.387\ci{0.034} & \cellcolor{colREU!50}0.836 & \cellcolor{colAEU!30}0.495 & \cellcolor{colRVR!20}\best{0.341}\ci{0.031} & \cellcolor{colREU!53}0.878 & \cellcolor{colAEU!26}0.431 & \cellcolor{colRVR!27}0.447\ci{0.031} \\
+ & 512 & \cellcolor{colREU!57}0.946 & \cellcolor{colAEU!38}0.632 & \cellcolor{colRVR!19}0.314\ci{0.029} & \cellcolor{colREU!59}0.980 & \cellcolor{colAEU!49}0.815 & \cellcolor{colRVR!10}0.165\ci{0.024} & \cellcolor{colREU!57}0.958 & \cellcolor{colAEU!32}0.542 & \cellcolor{colRVR!25}0.416\ci{0.029} \\
+ & 1024 & \cellcolor{colREU!58}0.970 & \cellcolor{colAEU!41}0.682 & \cellcolor{colRVR!17}0.288\ci{0.028} & \cellcolor{colREU!60}0.992 & \cellcolor{colAEU!55}0.916 & \cellcolor{colRVR!5}0.076\ci{0.016} & \cellcolor{colREU!57}0.958 & \cellcolor{colAEU!33}0.556 & \cellcolor{colRVR!24}0.402\ci{0.028} \\
+ & 2048 & \cellcolor{colREU!59}0.976 & \cellcolor{colAEU!41}0.689 & \cellcolor{colRVR!17}0.287\ci{0.028} & \cellcolor{colREU!60}0.994 & \cellcolor{colAEU!55}0.919 & \cellcolor{colRVR!4}0.075\ci{0.016} & \cellcolor{colREU!58}0.960 & \cellcolor{colAEU!34}0.559 & \cellcolor{colRVR!24}0.401\ci{0.028} \\
 \midrule
-\multirow{7}{*}{MathArena} & 0 & \cellcolor{colREU!2}0.033 & \cellcolor{colAEU!1}0.017 & \cellcolor{colRVR!1}0.016\ci{0.024} \\
- & 64 & \cellcolor{colREU!5}0.083 & \cellcolor{colAEU!1}0.012 & \cellcolor{colRVR!4}0.072\ci{0.064} \\
- & 128 & \cellcolor{colREU!4}0.067 & \cellcolor{colAEU!0}0.005 & \cellcolor{colRVR!4}0.062\ci{0.056} \\
- & 256 & \cellcolor{colREU!3}0.050 & \cellcolor{colAEU!0}0.004 & \cellcolor{colRVR!3}0.046\ci{0.052} \\
- & 512 & \cellcolor{colREU!9}0.150 & \cellcolor{colAEU!1}0.014 & \cellcolor{colRVR!8}0.136\ci{0.085} \\
- & 1024 & \cellcolor{colREU!9}0.150 & \cellcolor{colAEU!1}0.013 & \cellcolor{colRVR!8}0.137\ci{0.085} \\
- & 2048 & \cellcolor{colREU!13}0.217 & \cellcolor{colAEU!1}0.021 & \cellcolor{colRVR!12}\best{0.196}\ci{0.100} \\
+\multirow{7}{*}{MathArena} & 0 & \cellcolor{colREU!2}0.033 & \cellcolor{colAEU!1}0.017 & \cellcolor{colRVR!1}0.016\ci{0.024} & \cellcolor{colREU!2}0.033 & \cellcolor{colAEU!2}0.033 & \cellcolor{colRVR!0}0.000\ci{0.000} & \cellcolor{colREU!1}0.017 & \cellcolor{colAEU!1}0.016 & \cellcolor{colRVR!0}0.001\ci{0.002} \\
+ & 64 & \cellcolor{colREU!5}0.083 & \cellcolor{colAEU!1}0.012 & \cellcolor{colRVR!4}0.072\ci{0.064} & \cellcolor{colREU!4}0.067 & \cellcolor{colAEU!1}0.021 & \cellcolor{colRVR!3}0.046\ci{0.048} & \cellcolor{colREU!5}0.083 & \cellcolor{colAEU!1}0.016 & \cellcolor{colRVR!4}0.067\ci{0.057} \\
+ & 128 & \cellcolor{colREU!4}0.067 & \cellcolor{colAEU!0}0.005 & \cellcolor{colRVR!4}0.062\ci{0.056} & \cellcolor{colREU!4}0.067 & \cellcolor{colAEU!1}0.014 & \cellcolor{colRVR!3}0.053\ci{0.053} & \cellcolor{colREU!4}0.067 & \cellcolor{colAEU!1}0.016 & \cellcolor{colRVR!3}0.050\ci{0.047} \\
+ & 256 & \cellcolor{colREU!3}0.050 & \cellcolor{colAEU!0}0.004 & \cellcolor{colRVR!3}0.046\ci{0.052} & \cellcolor{colREU!9}0.150 & \cellcolor{colAEU!1}0.016 & \cellcolor{colRVR!8}0.134\ci{0.086} & \cellcolor{colREU!6}0.100 & \cellcolor{colAEU!1}0.016 & \cellcolor{colRVR!5}0.084\ci{0.063} \\
+ & 512 & \cellcolor{colREU!9}0.150 & \cellcolor{colAEU!1}0.014 & \cellcolor{colRVR!8}0.136\ci{0.085} & \cellcolor{colREU!14}0.233 & \cellcolor{colAEU!2}0.041 & \cellcolor{colRVR!12}0.192\ci{0.100} & \cellcolor{colREU!6}0.100 & \cellcolor{colAEU!1}0.018 & \cellcolor{colRVR!5}0.082\ci{0.066} \\
+ & 1024 & \cellcolor{colREU!9}0.150 & \cellcolor{colAEU!1}0.013 & \cellcolor{colRVR!8}0.137\ci{0.085} & \cellcolor{colREU!27}0.450 & \cellcolor{colAEU!6}0.100 & \cellcolor{colRVR!21}\best{0.350}\ci{0.106} & \cellcolor{colREU!9}0.150 & \cellcolor{colAEU!1}0.013 & \cellcolor{colRVR!8}0.137\ci{0.082} \\
+ & 2048 & \cellcolor{colREU!13}0.217 & \cellcolor{colAEU!1}0.021 & \cellcolor{colRVR!12}\best{0.196}\ci{0.100} & \cellcolor{colREU!27}0.450 & \cellcolor{colAEU!7}0.112 & \cellcolor{colRVR!20}0.338\ci{0.107} & \cellcolor{colREU!13}0.217 & \cellcolor{colAEU!1}0.015 & \cellcolor{colRVR!12}\best{0.202}\ci{0.097} \\
 \bottomrule
 \end{tabular}
-\end{table}
+\end{table*}
 
 \begin{table}[t]
 \centering

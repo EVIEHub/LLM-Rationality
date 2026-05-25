@@ -152,7 +152,12 @@ H3_TEMP_DATASETS = [
     ("matharena", "MathArena"), ("livecodebench", "LiveCodeBench"),
 ]
 H3_TAUS = [(0.0, r"$\tau{=}0$"), (0.7, r"$\tau{=}0.7$"), (1.0, r"$\tau{=}1$")]
-H4_MODEL = "tulu3-8b-rlvr"
+H4_MODEL = "tulu3-8b-rlvr"  # legacy single-model alias (still used elsewhere)
+H4_MODELS = [
+    ("tulu3-8b-rlvr",       "Tülu-3-8B-RLVR"),
+    ("qwen2.5-7b-instruct", "Qwen2.5-7B-Instruct"),
+    ("llama3.1-8b-instruct", "Llama-3.1-8B-Instruct"),
+]
 H4_DATASETS = [("gsm8k", "GSM8K"), ("math", "MATH"), ("matharena", "MathArena")]
 H4_LS = [0, 64, 128, 256, 512, 1024, 2048]
 H5_DEPLOY = [("matharena", "MathArena"), ("livecodebench", "LiveCodeBench")]
@@ -469,44 +474,74 @@ def build_h3_temp(results_dir: Path, seed: int, dp: int) -> str:
 
 
 def build_h4(results_dir: Path, seed: int, dp: int, heatmap: bool = True) -> str:
+    """H4 budget-forced table with model as the outer column dimension.
+
+    Rows: (dataset, $T$) where $T \\in$ ``H4_LS`` is the forced
+    reasoning-length budget. Columns: 3 models $\\times$ \\{REU, AEU,
+    RVR\\}. Cells are auto-coloured (``colREU`` / ``colAEU`` /
+    ``colRVR``) with intensity proportional to value; the per-dataset
+    max-RVR per model is marked in \\textbf{bold}.
+    """
     cells = _index(
-        [r for r in _load_dir(results_dir, "h4", seed) if r.get("model") == H4_MODEL],
-        lambda r: (r["dataset"], int(r["L"])),
+        [r for r in _load_dir(results_dir, "h4", seed)
+         if any(r.get("model") == m for m, _ in H4_MODELS)],
+        lambda r: (r["model"], r["dataset"], int(r["L"])),
     )
-    # Anchor colours per metric with value-proportional intensity.
+
     def tint(base: str, v: float) -> str:
         return _shade(base, v, heatmap)
 
+    n_models = len(H4_MODELS)
+    col_spec = "ll " + " ".join(["ccc"] * n_models)
     lines = [
-        r"\begin{table}[t]", r"\centering", r"\small",
-        r"\setlength{\tabcolsep}{5pt}",
-        r"\caption{Rational value risk under varying reasoning lengths $T$. "
-        r"Values are reported as mean $\pm$ 95\% bootstrap confidence "
-        r"interval; bold indicates the largest RVR per dataset.}",
+        r"\begin{table*}[t]", r"\centering", r"\small",
+        r"\setlength{\tabcolsep}{4pt}",
+        r"\caption{Rational value risk under varying reasoning-length "
+        r"budgets $T$, across three open-weight 8B-scale models. "
+        r"Columns are grouped by model; each group reports REU, AEU, "
+        r"and RVR (mean $\pm$ 95\% bootstrap half-width). Cells are "
+        r"auto-coloured by value (\texttt{colREU} / \texttt{colAEU} / "
+        r"\texttt{colRVR}; intensity $\propto$ value); \textbf{bold} "
+        r"marks the largest RVR per (dataset, model).}",
         r"\label{tab:h4}",
-        r"\begin{tabular}{ll ccc}",
+        r"\begin{tabular}{" + col_spec + "}",
         r"\toprule",
-        r"Dataset & $T$ & REU & AEU & RVR \\",
+        r"\multirow{2}{*}{Dataset} & \multirow{2}{*}{$T$} & "
+        + " & ".join(r"\multicolumn{3}{c}{%s}" % disp
+                     for _, disp in H4_MODELS) + r" \\",
+        " ".join(
+            r"\cmidrule(lr){%d-%d}" % (3 + 3 * j, 5 + 3 * j)
+            for j in range(n_models)
+        ),
+        r" & & " + " & ".join(["REU & AEU & RVR"] * n_models) + r" \\",
         r"\midrule",
     ]
     for di, (ds, ds_disp) in enumerate(H4_DATASETS):
-        series = [cells.get((ds, L)) for L in H4_LS]
-        rvrs = [c.rvr if c else None for c in series]
-        bold_set = _extreme_idx(rvrs, "max")
+        # bold the max-RVR L per (model, dataset) so each model gets one bold row
+        bold_sets = {}
+        for m, _ in H4_MODELS:
+            rvrs = [cells.get((m, ds, L)).rvr if (m, ds, L) in cells else None
+                    for L in H4_LS]
+            bold_sets[m] = _extreme_idx(rvrs, "max")
         for li, L in enumerate(H4_LS):
-            c = series[li]
-            head = r"\multirow{%d}{*}{%s}" % (len(H4_LS), ds_disp) if li == 0 else ""
-            if c is None:
-                body = r"\na & \na & \na"
-            else:
-                body = (tint("colREU", c.reu) + _fmt(c.reu, dp) + " & "
-                        + tint("colAEU", c.aeu) + _fmt(c.aeu, dp) + " & "
-                        + tint("colRVR", c.rvr)
-                        + _rvr_str(c, dp=dp, with_ci=True, bold=(li in bold_set)))
-            lines.append(f"{head} & {L} & {body} \\\\")
+            head = (r"\multirow{%d}{*}{%s}" % (len(H4_LS), ds_disp)
+                    if li == 0 else "")
+            parts = [head, str(L)]
+            for m, _ in H4_MODELS:
+                c = cells.get((m, ds, L))
+                if c is None:
+                    parts.extend([r"\na", r"\na", r"\na"])
+                else:
+                    parts.append(tint("colREU", c.reu) + _fmt(c.reu, dp))
+                    parts.append(tint("colAEU", c.aeu) + _fmt(c.aeu, dp))
+                    rvr_cell = (tint("colRVR", c.rvr)
+                                + _rvr_str(c, dp=dp, with_ci=True,
+                                           bold=(li in bold_sets[m])))
+                    parts.append(rvr_cell)
+            lines.append(" & ".join(parts) + r" \\")
         if di < len(H4_DATASETS) - 1:
             lines.append(r"\midrule")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table*}"]
     return "\n".join(lines)
 
 
