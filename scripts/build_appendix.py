@@ -5,14 +5,24 @@ Run from the repo root:
     python -m scripts.build_appendix --results-dir ~/rational_gap_outputs/results
 
 Outputs land in ``drafts/appendix_inputs/`` — one ``.tex`` file per section
-(e.g.\ ``C1_saturation.tex``). The master ``drafts/appendix.tex`` ``\\input``-s
+(e.g.\\ ``C1_saturation.tex``). The master ``drafts/appendix.tex`` ``\\input``-s
 each. Sections that need extra experiments / instrumented re-runs are recorded
 in ``drafts/appendix_inputs/PENDING.md``.
+
+Pass ``--inline`` to also emit ``drafts/appendix_inline.tex`` — a single,
+self-contained appendix with every ``\\input{appendix_inputs/...}`` line
+substituted by the corresponding fragment's contents. Convenient for
+Overleaf / single-file submissions: upload one file, no directory tree
+needed; re-run the script anytime to regenerate the inline copy from the
+latest numbers. The inlined fragments are wrapped in
+``% AUTO-INLINED FROM ...`` / ``% END AUTO-INLINE`` markers so diffs stay
+readable.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 from src.plotting.appendix import (
@@ -60,12 +70,71 @@ representative incorrect sample.
 """
 
 
+_INPUT_RE = re.compile(r"\\input\{appendix_inputs/([^}]+)\}")
+
+
+def _build_inline(appendix_path: Path, fragments_dir: Path,
+                  out_path: Path) -> None:
+    """Substitute every ``\\input{appendix_inputs/X}`` in ``appendix_path``
+    with the contents of ``fragments_dir/X`` and write to ``out_path``.
+
+    Fragments not on disk are left as the original ``\\input{}`` line
+    plus a ``% WARNING: fragment missing`` marker, so the inline file
+    still compiles if the user later replaces the marker by hand.
+    """
+    lines: list[str] = []
+    fragments_used: list[str] = []
+    fragments_missing: list[str] = []
+    src = appendix_path.read_text().splitlines()
+    for ln in src:
+        m = _INPUT_RE.search(ln)
+        if not m:
+            lines.append(ln)
+            continue
+        frag_name = m.group(1)
+        frag_path = fragments_dir / frag_name
+        if not frag_path.exists():
+            lines.append(f"% WARNING: fragment missing: {frag_path}")
+            lines.append(ln)
+            fragments_missing.append(frag_name)
+            continue
+        lines.append(f"% ===== AUTO-INLINED FROM appendix_inputs/{frag_name} =====")
+        lines.append(frag_path.read_text().rstrip())
+        lines.append(f"% ===== END AUTO-INLINE ({frag_name}) =====")
+        fragments_used.append(frag_name)
+    out_path.write_text("\n".join(lines) + "\n")
+    print(f"  inlined {len(fragments_used)} fragment(s) into {out_path}")
+    for name in fragments_used:
+        print(f"    + {name}")
+    for name in fragments_missing:
+        print(f"    ! {name}  (MISSING — left as \\input)")
+
+
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--results-dir", default=None)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out-dir",
                    default=str(_REPO_ROOT / "drafts" / "appendix_inputs"))
+    p.add_argument(
+        "--inline", action="store_true",
+        help="Also emit drafts/appendix_inline.tex — a single self-"
+             "contained file with every \\input{appendix_inputs/...} "
+             "substituted in-place. Convenient for Overleaf / "
+             "single-file submissions.",
+    )
+    p.add_argument(
+        "--appendix-tex",
+        default=str(_REPO_ROOT / "drafts" / "appendix.tex"),
+        help="Path to the appendix template used by --inline (default: "
+             "drafts/appendix.tex).",
+    )
+    p.add_argument(
+        "--inline-out",
+        default=str(_REPO_ROOT / "drafts" / "appendix_inline.tex"),
+        help="Output path for --inline (default: "
+             "drafts/appendix_inline.tex).",
+    )
     args = p.parse_args()
 
     if args.results_dir:
@@ -93,6 +162,13 @@ def main() -> None:
         print(f"  wrote {out_dir / name}")
     (out_dir / "PENDING.md").write_text(_PENDING)
     print(f"  wrote {out_dir / 'PENDING.md'}")
+
+    if args.inline:
+        _build_inline(
+            appendix_path=Path(args.appendix_tex),
+            fragments_dir=out_dir,
+            out_path=Path(args.inline_out),
+        )
 
 
 if __name__ == "__main__":

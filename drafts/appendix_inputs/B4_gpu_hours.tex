@@ -1,18 +1,18 @@
 \begin{table}[htbp]
 \centering
 \small
-\caption{GPU-hour breakdown summed from each cell's \texttt{sampling\_seconds}. Verification (CPU) and bootstrap (CPU) wall-time are not included.}
+\caption{GPU-hour breakdown for the sampling stage. Verification (CPU) and bootstrap (CPU) wall-time are not included. For H1, H2, H4 the wall-clock comes from each cell's \texttt{sampling\_seconds} field; for H3 the cell runner does not log per-cell timing, so we fall back to the global \texttt{compute\_budget.jsonl} append-log (merged across the two sampling servers, dedup'd by (experiment, seed)). H3 cache-hit cells (the $\tau{=}1$ direct cells and the SC bootstraps re-use the H1 cache) do not appear in \texttt{compute\_budget.jsonl} and correctly contribute $0$ incremental GPU-hours.}
 \label{tab:appendix_gpu_hours}
-\begin{tabular}{lrr}
+\begin{tabular}{lrrrl}
 \toprule
-Hypothesis & Cells & GPU-hr (sampling) \\
+Hypothesis & Cells & w/ timing & GPU-hr & Source \\
 \midrule
-H1 & 42 & 25.3 \\
-H2 & 33 & 7.7 \\
-H3 & 140 & 0.0 \\
-H4 & 28 & 9.2 \\
+H1 & 42 & 42 & 25.3 & \texttt{per-cell} \\
+H2 & 33 & 33 & 7.7 & \texttt{per-cell} \\
+H3 & 140 & 0 & 20.0 & \texttt{compute\_budget} \\
+H4 & 28 & 28 & 9.2 & \texttt{per-cell} \\
 \midrule
-\textbf{Total billable} & 243 & 42.2 \\
+\textbf{Total} & 243 & 103 & 62.2 & \\
 \bottomrule
 \end{tabular}
 \end{table}

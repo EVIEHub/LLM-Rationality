@@ -275,7 +275,26 @@ recorded separately. The reported numbers are GPU-hours from the
 $\tau{=}1$ and H2 RLVR cells are cache hits and contribute zero
 incremental GPU-hours.
 
-\input{appendix_inputs/B4_gpu_hours.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/B4_gpu_hours.tex =====
+\begin{table}[htbp]
+\centering
+\small
+\caption{GPU-hour breakdown for the sampling stage. Verification (CPU) and bootstrap (CPU) wall-time are not included. For H1, H2, H4 the wall-clock comes from each cell's \texttt{sampling\_seconds} field; for H3 the cell runner does not log per-cell timing, so we fall back to the global \texttt{compute\_budget.jsonl} append-log (merged across the two sampling servers, dedup'd by (experiment, seed)). H3 cache-hit cells (the $\tau{=}1$ direct cells and the SC bootstraps re-use the H1 cache) do not appear in \texttt{compute\_budget.jsonl} and correctly contribute $0$ incremental GPU-hours.}
+\label{tab:appendix_gpu_hours}
+\begin{tabular}{lrrrl}
+\toprule
+Hypothesis & Cells & w/ timing & GPU-hr & Source \\
+\midrule
+H1 & 42 & 42 & 25.3 & \texttt{per-cell} \\
+H2 & 33 & 33 & 7.7 & \texttt{per-cell} \\
+H3 & 140 & 0 & 20.0 & \texttt{compute\_budget} \\
+H4 & 28 & 28 & 9.2 & \texttt{per-cell} \\
+\midrule
+\textbf{Total} & 243 & 103 & 62.2 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+% ===== END AUTO-INLINE (B4_gpu_hours.tex) =====
 
 \subsection{Random seeds}
 \label{app:config:seeds}
@@ -322,7 +341,56 @@ for the three headline H1 cells, including $U^\circ_K$ and $\bar U_K$ at
 every grid point. The corresponding plot is Figure~1 in the main text;
 this table is the raw data behind it.
 
-\input{appendix_inputs/C1_saturation.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/C1_saturation.tex =====
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{4pt}
+\caption{Saturation curves for the headline H1 cells. Each entry is the prompt-mean at the given budget $K'$; the last column's $\hat{\mathcal R}_K$ row carries the 95\% prompt-bootstrap CI (B$=$1000 resamples).}
+\label{tab:appendix_saturation}
+\begin{tabular}{lll *{7}{r}}
+\toprule
+Model & Dataset & Metric & $K{=}1$ & $K{=}2$ & $K{=}4$ & $K{=}8$ & $K{=}16$ & $K{=}32$ & $K{=}64$ \\
+\midrule
+\multirow{9}{*}{Tülu-3-8B-RLVR} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & 0.858 & 0.916 & 0.946 & 0.959 & 0.973 & 0.980 & 0.984 \\
+ &  & $\bar U_K$ & 0.858 & 0.861 & 0.861 & 0.861 & 0.863 & 0.861 & 0.861 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.055 & 0.085 & 0.098 & 0.110 & 0.118 & 0.123 $\pm$ 0.012 \\
+\cmidrule(l){2-10}
+ & \multirow{3}{*}{MATH} & $U^\circ_K$ & 0.682 & 0.786 & 0.846 & 0.896 & 0.928 & 0.948 & 0.967 \\
+ &  & $\bar U_K$ & 0.682 & 0.669 & 0.664 & 0.662 & 0.661 & 0.660 & 0.658 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.117 & 0.182 & 0.234 & 0.267 & 0.288 & 0.309 $\pm$ 0.021 \\
+\cmidrule(l){2-10}
+ & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & 0.463 & 0.573 & 0.646 & 0.665 & 0.768 & 0.823 & 0.848 \\
+ &  & $\bar U_K$ & 0.463 & 0.445 & 0.398 & 0.355 & 0.362 & 0.381 & 0.398 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.128 & 0.248 & 0.309 & 0.406 & 0.442 & 0.450 $\pm$ 0.051 \\
+\midrule
+\multirow{9}{*}{Qwen2.5-7B-Instruct} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & 0.907 & 0.944 & 0.961 & 0.974 & 0.978 & 0.985 & 0.990 \\
+ &  & $\bar U_K$ & 0.907 & 0.904 & 0.907 & 0.907 & 0.906 & 0.907 & 0.906 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.039 & 0.054 & 0.067 & 0.072 & 0.078 & 0.085 $\pm$ 0.010 \\
+\cmidrule(l){2-10}
+ & \multirow{3}{*}{MATH} & $U^\circ_K$ & 0.904 & 0.953 & 0.974 & 0.982 & 0.985 & 0.991 & 0.993 \\
+ &  & $\bar U_K$ & 0.904 & 0.901 & 0.903 & 0.900 & 0.898 & 0.897 & 0.898 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.051 & 0.071 & 0.082 & 0.087 & 0.094 & 0.095 $\pm$ 0.013 \\
+\cmidrule(l){2-10}
+ & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & 0.762 & 0.805 & 0.866 & 0.896 & 0.915 & 0.927 & 0.933 \\
+ &  & $\bar U_K$ & 0.762 & 0.762 & 0.761 & 0.758 & 0.750 & 0.755 & 0.749 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.043 & 0.105 & 0.138 & 0.165 & 0.172 & 0.184 $\pm$ 0.044 \\
+\midrule
+\multirow{9}{*}{Llama-3.1-8B-Instruct} & \multirow{3}{*}{GSM8K} & $U^\circ_K$ & 0.781 & 0.879 & 0.929 & 0.958 & 0.972 & 0.983 & 0.990 \\
+ &  & $\bar U_K$ & 0.781 & 0.777 & 0.782 & 0.782 & 0.781 & 0.780 & 0.780 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.102 & 0.147 & 0.176 & 0.191 & 0.203 & 0.210 $\pm$ 0.013 \\
+\cmidrule(l){2-10}
+ & \multirow{3}{*}{MATH} & $U^\circ_K$ & 0.458 & 0.631 & 0.761 & 0.844 & 0.897 & 0.929 & 0.949 \\
+ &  & $\bar U_K$ & 0.458 & 0.473 & 0.471 & 0.472 & 0.472 & 0.469 & 0.470 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.158 & 0.290 & 0.372 & 0.425 & 0.460 & 0.479 $\pm$ 0.020 \\
+\cmidrule(l){2-10}
+ & \multirow{3}{*}{HumanEval} & $U^\circ_K$ & 0.476 & 0.561 & 0.689 & 0.726 & 0.780 & 0.817 & 0.848 \\
+ &  & $\bar U_K$ & 0.476 & 0.448 & 0.454 & 0.443 & 0.437 & 0.431 & 0.431 \\
+ &  & $\hat{\mathcal R}_K$ & 0.000 & 0.113 & 0.235 & 0.283 & 0.343 & 0.386 & 0.417 $\pm$ 0.053 \\
+\bottomrule
+\end{tabular}
+\end{table*}
+% ===== END AUTO-INLINE (C1_saturation.tex) =====
 
 \textbf{Interpretation.} The saturation curve is monotone non-decreasing
 in $K'$ by construction (taking the max over a larger set can only
@@ -355,7 +423,25 @@ with replacement (a bootstrap that approximates fresh i.i.d.\ judge
 calls under the stationary judge distribution). The L=5 row uses all
 recorded verdicts deterministically, so std$=0$ by construction.
 
-\input{appendix_inputs/C2_L_sensitivity.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/C2_L_sensitivity.tex =====
+\begin{table}[htbp]
+\centering
+\small
+\caption{Effect of $L$ on $\hat{\mathcal R}_K$ at $K{=}32$ for the H1 preference cell (Tülu-3-RLVR on UltraFeedback, $M{=}1000$). Std is across $B{=}200$ bootstrap resamples of the $L'$-subsampled vote pattern with the prompt set held fixed. The $L{=}5$ row matches the headline preference cell exactly (no resampling: when $L'{=}L_{\text{rec}}$ each ``sample'' uses all recorded verdicts, so std$=0$ by construction).}
+\label{tab:appendix_L_sensitivity}
+\begin{tabular}{cccc}
+\toprule
+$L'$ & $\hat{\mathcal R}_K$ & std (verdict-bootstrap) & Parse-failure rate \\
+\midrule
+1 & 0.362 & 0.0027 & \textemdash \\
+3 & 0.363 & 0.0021 & \textemdash \\
+5 & 0.363 & 0.0000 & 0.0385 \\
+7 & 0.362 & 0.0022 & \textemdash \\
+9 & 0.363 & 0.0020 & \textemdash \\
+\bottomrule
+\end{tabular}
+\end{table}
+% ===== END AUTO-INLINE (C2_L_sensitivity.tex) =====
 
 \paragraph{What the table says.}
 $\hat{\mathcal R}_K$ is remarkably insensitive to $L$: across the
@@ -380,7 +466,26 @@ subsets of the per-prompt array
 \texttt{per\_prompt\_R\_hat\_K} at $M' \in \{50, 100, 200, 500, 1000, 1319\}$
 without replacement, with $B{=}1000$ bootstrap resamples at each $M'$.
 
-\input{appendix_inputs/C3_M_convergence.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/C3_M_convergence.tex =====
+\begin{table}[htbp]
+\centering
+\small
+\caption{Prompt-bootstrap CI half-width on $\hat{\mathcal R}_K$ shrinks as $1/\sqrt{M'}$ as the prompt sub-sample grows (headline cell: tulu3-8b-rlvr / gsm8k, $K{=}64$, $B{=}1000$). Last column is the half-width $\times\sqrt{M'}$; a near-constant ratio confirms the rate.}
+\label{tab:appendix_M_convergence}
+\begin{tabular}{rrr}
+\toprule
+$M'$ & CI half-width & $\sqrt{M'}\cdot$half-width \\
+\midrule
+50 & 0.0795 & 0.5624 \\
+100 & 0.0347 & 0.3469 \\
+200 & 0.0291 & 0.4116 \\
+500 & 0.0178 & 0.3973 \\
+1000 & 0.0149 & 0.4696 \\
+1319 & 0.0129 & 0.4698 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% ===== END AUTO-INLINE (C3_M_convergence.tex) =====
 
 \subsection{Linking to Theorem~1}
 \label{app:calibration:thm1}
@@ -604,7 +709,23 @@ $NL\approx 1.6\times10^5$).
 \cref{tab:appendix_position_bias} also reports the mean absolute
 majority margin $|n_{\text{win}}{-}n_{\text{lose}}|$ across pairs.
 
-\input{appendix_inputs/D2_position_bias.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/D2_position_bias.tex =====
+\begin{table}[htbp]
+\centering
+\small
+\caption{Self-judge audit-log diagnostics on the H1 UltraFeedback cells. \emph{A-pick rate} is the fraction of non-tie judge calls (across $M\cdot K\cdot L$ verdicts) where the judge picked the response in position A — a no-bias judge gives $0.5$. The position flag was reconstructed from the recorded cell seed via the same RNG call used at sampling time (deterministic replay; see \cref{app:calibration:L}). $\alpha$ is Krippendorff's $\alpha$ on the ternary scale $\{0,0.5,1\}$ across the $L{=}5$ verdicts of each (prompt, candidate) pair. \emph{Mean margin} is the average $|n_{\text{win}} - n_{\text{lose}}|$ across pairs.}
+\label{tab:appendix_position_bias}
+\begin{tabular}{lccc}
+\toprule
+Judge & A-pick rate & $\alpha$ (ternary) & mean $|$margin$|$ \\
+\midrule
+Tülu-3-8B-RLVR & 0.502 & 0.599 & 3.63 \\  % position via reconstructed
+Qwen2.5-7B-Instruct & 0.501 & 0.595 & 3.67 \\  % position via reconstructed
+Llama-3.1-8B-Instruct & 0.502 & 0.639 & 3.82 \\  % position via reconstructed
+\bottomrule
+\end{tabular}
+\end{table}
+% ===== END AUTO-INLINE (D2_position_bias.tex) =====
 
 \paragraph{Reproducibility of the position-flag column.}
 The audit log in \texttt{outputs/logs/verifier/}\allowbreak
@@ -766,7 +887,30 @@ unstratified in \cref{tab:appendix_per_difficulty} for completeness.
 
 \subsection{Headline breakdown}
 
-\input{appendix_inputs/E2_per_difficulty.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/E2_per_difficulty.tex =====
+\begin{table}[htbp]
+\centering
+\small
+\setlength{\tabcolsep}{5pt}
+\caption{Per-difficulty $\hat{\mathcal R}_K$ at $K{=}64$. MATH is bucketed by the official \texttt{level} field (1=easiest, 5=hardest); HumanEval is bucketed by canonical-solution-length tercile.}
+\label{tab:appendix_per_difficulty}
+\begin{tabular}{lll rrr}
+\toprule
+Dataset & Bucket & $n$ & Tülu-3-8B-RLVR & Qwen2.5-7B-Instruct & Llama-3.1-8B-Instruct \\
+\midrule
+MATH & L1 & 113 & 0.066 & 0.009 & 0.202 \\
+ & L2 & 170 & 0.174 & 0.039 & 0.339 \\
+ & L3 & 226 & 0.253 & 0.049 & 0.449 \\
+ & L4 & 234 & 0.320 & 0.088 & 0.557 \\
+ & L5 & 257 & 0.545 & 0.218 & 0.648 \\
+\midrule
+HumanEval & short & 56 & 0.392 & 0.093 & 0.337 \\
+ & medium & 53 & 0.463 & 0.212 & 0.443 \\
+ & long & 55 & 0.495 & 0.249 & 0.472 \\
+\bottomrule
+\end{tabular}
+\end{table}
+% ===== END AUTO-INLINE (E2_per_difficulty.tex) =====
 
 \textbf{Interpretation.} The take-away is that $\hat{\mathcal R}_K$ is bounded
 away from zero in \emph{every} bucket, including the hardest tier
@@ -793,7 +937,21 @@ H1 cells. Per-prompt arrays come from the cell result JSONs
 (\texttt{per\_prompt\_U\_circ\_K}, \texttt{per\_prompt\_U\_bar\_K});
 the underlying generations come from the sample cache.
 
-\input{appendix_inputs/G_candidates.tex}
+% ===== AUTO-INLINED FROM appendix_inputs/G_candidates.tex =====
+\paragraph{Spike-at-0 candidate prompts for the failure-case appendix.} The full per-prompt arrays in the result JSONs let any reader filter the same candidate set themselves; the rule is:
+$U^\circ_K(x_i)=1$ \emph{and} $\bar U_K(x_i) \le 0.1$, i.e.\ the model can reach the correct answer in 64 samples but only on a small fraction of them. The candidate counts below come straight from the per-prompt arrays:
+\begin{itemize}
+  \item Tülu-3-8B-RLVR / GSM8K: 35 candidates out of 1319 prompts.
+  \item Tülu-3-8B-RLVR / MATH: 68 candidates out of 1000 prompts.
+  \item Tülu-3-8B-RLVR / HumanEval: 29 candidates out of 164 prompts.
+  \item Qwen2.5-7B-Instruct / GSM8K: 22 candidates out of 1319 prompts.
+  \item Qwen2.5-7B-Instruct / MATH: 15 candidates out of 1000 prompts.
+  \item Qwen2.5-7B-Instruct / HumanEval: 9 candidates out of 164 prompts.
+  \item Llama-3.1-8B-Instruct / GSM8K: 45 candidates out of 1319 prompts.
+  \item Llama-3.1-8B-Instruct / MATH: 115 candidates out of 1000 prompts.
+  \item Llama-3.1-8B-Instruct / HumanEval: 23 candidates out of 164 prompts.
+\end{itemize}
+% ===== END AUTO-INLINE (G_candidates.tex) =====
 
 From these candidates we select 4--5 traces per dataset and reproduce
 (i)~the prompt, (ii)~the lowest-$k$ correct sample, and

@@ -66,9 +66,9 @@ _MODEL_ORDER = [
 # REU / AEU / RVR line styles — colours anchored to match the tables.
 # RVR is the headline (solid line); REU and AEU are the decomposition (dotted).
 _METRIC_STYLE = [
-    ("U_circ_K", "REU", "#A5D2E8", "^", ":"),   # light blue, dotted
-    ("U_bar_K",  "AEU", "#E5B88E", "v", ":"),   # light peach/orange, dotted
-    ("R_hat_K",  "RVR", "#CE80D8", "o", "-"),   # light magenta, solid
+    ("U_circ_K", "REU", "#8FC4DF", "^", ":"),   # soft blue, dotted
+    ("U_bar_K",  "AEU", "#D6A77E", "v", ":"),   # muted amber, dotted
+    ("R_hat_K",  "RVR", "#CC7E9A", "o", "-"),   # dusty pink, solid
 ]
 
 _TAUS = [0.0, 0.7, 1.0]
@@ -97,6 +97,12 @@ def _grid(models, datasets):
 
 
 def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path | None:
+    """SC saturation: rows = models, columns = datasets.
+
+    Matches the row/column convention of :func:`plot_temperature`
+    so the reader doesn't have to mentally transpose between the two
+    H3 figures.
+    """
     sc = [c for c in cells if c["_proc"] == "sc"]
     if not sc:
         print("  no SC cells, skipping saturation figure")
@@ -138,8 +144,8 @@ def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path |
             if i == len(models) - 1:
                 ax.set_xlabel(r"$n$")
             if j == 0:
-                # SC ylabel uses the model name -- keep it a touch smaller
-                # than the temperature plot's ylabel (which uses dataset names).
+                # Model label on the y-axis (left edge); dataset labels
+                # are the column titles.
                 ax.set_ylabel(m_lbl + "\nutility", fontsize=15)
             if i == 0:
                 ax.set_title(ds_lbl, fontsize=18)
@@ -151,6 +157,12 @@ def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path |
 
 
 def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | None:
+    """Temperature sweep: rows = models, columns = datasets.
+
+    Same row/column convention as :func:`plot_sc_saturation` —
+    model labels on the left edge of each row, dataset labels along
+    the column titles.
+    """
     direct = [c for c in cells if c["_proc"] == "direct" and "tau" in c]
     if not direct:
         print("  no direct cells, skipping temperature figure")
@@ -163,16 +175,16 @@ def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | N
     for c in direct:
         idx[(c["model"], c["dataset"], round(float(c["tau"]), 3))] = c
 
-    # Rows = datasets, columns = models (tall, narrow figure).
+    # Rows = models (3), columns = datasets (up to 6). Wide & short.
     fig, axes = plt.subplots(
-        len(datasets), len(models),
-        figsize=(2.7 * len(models), 1.9 * len(datasets)),
+        len(models), len(datasets),
+        figsize=(2.2 * len(datasets), 2.0 * len(models)),
         sharex=True, sharey=True, squeeze=False,
     )
-    for i, (ds, ds_lbl) in enumerate(datasets):
-        for j, (m, m_lbl) in enumerate(models):
+    for i, (m, m_lbl) in enumerate(models):
+        for j, (ds, ds_lbl) in enumerate(datasets):
             ax = axes[i][j]
-            legend_panel = (i == 0 and j == len(models) - 1)
+            legend_panel = (i == 0 and j == len(datasets) - 1)
             present_taus = [t for t in _TAUS if (m, ds, t) in idx]
             if present_taus:
                 for field, label, color, marker, ls in _METRIC_STYLE:
@@ -193,12 +205,12 @@ def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | N
             ax.grid(True, alpha=0.3)
             ax.set_ylim(0, 1.0)
             ax.set_xticks(_TAUS)
-            if i == len(datasets) - 1:
+            if i == len(models) - 1:
                 ax.set_xlabel(r"$\tau$")
             if j == 0:
-                ax.set_ylabel(ds_lbl + "\nutility", fontsize=19)
+                ax.set_ylabel(m_lbl + "\nutility", fontsize=15)
             if i == 0:
-                ax.set_title(m_lbl, fontsize=18)
+                ax.set_title(ds_lbl, fontsize=18)
             if legend_panel:
                 ax.legend(fontsize=15, loc="upper right")
 

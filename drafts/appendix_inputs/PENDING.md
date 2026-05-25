@@ -16,10 +16,13 @@ matrix. To produce this:
 
 Then a small post-processor over that JSONL produces the C.2 table.
 
-## D.2 — Position bias / inter-rater agreement (self-judge cells)
-Needs the per-(prompt, candidate, l) raw verdicts and the
-`a_is_candidate` flag, currently dropped after aggregation. Same fix as
-C.2: re-run with audit logging, then post-process.
+## C.2 / D.2 — Self-judge audit-log re-aggregation
+Both sections now auto-fill IFF the self-judge audit log at
+`outputs/logs/verifier/ultrafeedback_log.jsonl` exists with the
+`a_is_candidate` flag baked in (Phase-2 patch to
+`scripts/run_h1.py` and `src/verification/self_judge.py`,
+2026-05-24). If the log is missing or pre-Phase-2, the builders emit
+a one-line `% NOTE` stub explaining what's needed.
 
 ## G — Failure-case traces
 Qualitative. The pipeline outputs `G_candidates.tex` listing the

@@ -114,36 +114,125 @@ def _cell_fingerprint(rec: dict) -> Optional[str]:
 # ======================================================================
 # B.4  GPU-hour breakdown
 # ======================================================================
+def _load_compute_budget(logs_dir: Path) -> dict[str, float]:
+    """Aggregate GPU-hours per hypothesis from
+    ``compute_budget.jsonl`` (and any ``compute_budget_*.jsonl``
+    siblings, e.g. one per sampling server). Returns
+    ``{"h1": hrs, "h2": hrs, "h3": hrs, "h4": hrs}``; missing keys
+    map to $0$. Dedupes by (experiment, seed) — the same cell may
+    appear in multiple server logs when work was rebalanced.
+    """
+    out: dict[str, float] = {}
+    seen: set[tuple] = set()
+    candidates = sorted(logs_dir.glob("compute_budget*.jsonl"))
+    for fp in candidates:
+        for line in fp.open():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                r = json.loads(line)
+            except Exception:
+                continue
+            exp = r.get("experiment", "")
+            md = r.get("metadata", {}) or {}
+            key = (exp, md.get("seed"))
+            if key in seen:
+                continue
+            seen.add(key)
+            h = exp.split("_", 1)[0]
+            if h in ("h1", "h2", "h3", "h4"):
+                out[h] = out.get(h, 0.0) + float(r.get("gpu_hours", 0.0))
+    return out
+
+
 def build_B4_gpu_hours(results_dir: Path, seed: int = 0) -> str:
-    """Sum ``sampling_seconds`` across cells, grouped by hypothesis dir."""
-    groups: dict[str, list[float]] = {}
+    """GPU-hour breakdown.
+
+    H1, H2, H4 cell runners write ``sampling_seconds`` to each result
+    JSON, so we sum that directly. The H3 runner currently omits
+    ``sampling_seconds``; for H3 we read ``compute_budget.jsonl``
+    (and any per-server siblings under ``outputs/logs/``) which the
+    sampling stack appends to on every run. The two sources are
+    combined into one table so every hypothesis has a real number.
+    """
+    # Per-cell sampling_seconds (the source of truth where present).
+    per_cell: dict[str, dict] = {}
     for sub in ("h1", "h2", "h3", "h4"):
+        n = 0
+        n_with_secs = 0
+        secs_sum = 0.0
         for rec in _load_dir(results_dir, sub, seed):
-            secs = rec.get("sampling_seconds") or 0.0
-            groups.setdefault(sub, []).append(secs)
+            n += 1
+            v = rec.get("sampling_seconds")
+            if v is not None:
+                secs_sum += float(v)
+                n_with_secs += 1
+        per_cell[sub] = {"n": n, "n_with_secs": n_with_secs,
+                         "secs": secs_sum}
+
+    # Fallback / cross-check: aggregate compute_budget.jsonl by
+    # hypothesis. logs_dir conventionally sits at results_dir.parent / "logs".
+    logs_dir = results_dir.parent / "logs"
+    budget = _load_compute_budget(logs_dir) if logs_dir.exists() else {}
 
     rows = []
-    total = 0.0
-    for sub, secs_list in groups.items():
-        n = len(secs_list)
-        gh = sum(secs_list) / 3600.0
-        total += gh
-        rows.append((sub.upper(), n, gh))
+    total_hrs = 0.0
+    any_from_budget = False
+    for sub in ("h1", "h2", "h3", "h4"):
+        t = per_cell[sub]
+        n, n_w, secs = t["n"], t["n_with_secs"], t["secs"]
+        from_cells = secs / 3600.0
+        if n_w == n and n > 0:
+            # Complete per-cell timing — use it.
+            hrs = from_cells
+            note = "per-cell"
+        elif n_w == 0 and sub in budget:
+            # Per-cell timing absent; fall back to compute_budget log.
+            hrs = budget[sub]
+            note = "compute\\_budget"
+            any_from_budget = True
+        elif n_w == 0:
+            hrs = float("nan")
+            note = "no record"
+        else:
+            # Mixed — sum per-cell and top up with the compute-budget
+            # delta for cells the budget log knows about but the JSONs
+            # don't.
+            hrs = max(from_cells, budget.get(sub, 0.0))
+            note = "per-cell + budget"
+        rows.append((sub.upper(), n, n_w, hrs, note))
+        if not (hrs != hrs):  # not nan
+            total_hrs += hrs
 
     lines = [
         r"\begin{table}[htbp]", r"\centering", r"\small",
-        r"\caption{GPU-hour breakdown summed from each cell's "
-        r"\texttt{sampling\_seconds}. Verification (CPU) and bootstrap "
-        r"(CPU) wall-time are not included.}",
+        r"\caption{GPU-hour breakdown for the sampling stage. "
+        r"Verification (CPU) and bootstrap (CPU) wall-time are not "
+        r"included. For H1, H2, H4 the wall-clock comes from each "
+        r"cell's \texttt{sampling\_seconds} field; for H3 the cell "
+        r"runner does not log per-cell timing, so we fall back to "
+        r"the global \texttt{compute\_budget.jsonl} append-log "
+        r"(merged across the two sampling servers, dedup'd by "
+        r"(experiment, seed)). H3 cache-hit cells (the $\tau{=}1$ "
+        r"direct cells and the SC bootstraps re-use the H1 cache) "
+        r"do not appear in \texttt{compute\_budget.jsonl} and "
+        r"correctly contribute $0$ incremental GPU-hours.}",
         r"\label{tab:appendix_gpu_hours}",
-        r"\begin{tabular}{lrr}", r"\toprule",
-        r"Hypothesis & Cells & GPU-hr (sampling) \\", r"\midrule",
+        r"\begin{tabular}{lrrrl}", r"\toprule",
+        r"Hypothesis & Cells & w/ timing & GPU-hr & Source \\",
+        r"\midrule",
     ]
-    for hyp, n, gh in rows:
-        lines.append(f"{hyp} & {n} & {gh:.1f} \\\\")
+    for hyp, n, n_w, hrs, note in rows:
+        gh = r"\textemdash" if hrs != hrs else f"{hrs:.1f}"  # nan check
+        lines.append(f"{hyp} & {n} & {n_w} & {gh} & \\texttt{{{note}}} \\\\")
     lines.append(r"\midrule")
-    lines.append(f"\\textbf{{Total billable}} & {sum(n for _,n,_ in rows)} "
-                 f"& {total:.1f} \\\\")
+    lines.append(
+        f"\\textbf{{Total}} & "
+        f"{sum(t['n'] for t in per_cell.values())} & "
+        f"{sum(t['n_with_secs'] for t in per_cell.values())} & "
+        f"{total_hrs:.1f} & \\\\"
+    )
     lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
     return "\n".join(lines)
 
@@ -477,7 +566,7 @@ def build_C2_L_sensitivity(
     dataset: str = "ultrafeedback",
     experiment: str = "h1_tulu3-8b-rlvr_ultrafeedback_seed",
     L_grid=(1, 3, 5, 7, 9),
-    B: int = 1000,
+    B: int = 200,
 ) -> str:
     """Re-aggregate the recorded L=5 verdicts at L' ∈ L_grid.
 
@@ -575,132 +664,175 @@ def build_C2_L_sensitivity(
 # D.2  Position bias + inter-rater agreement (Krippendorff's α)
 # ======================================================================
 def _krippendorff_alpha_ternary(verdicts: np.ndarray) -> float:
-    """Krippendorff's α on the ordinal scale {0, 0.5, 1}.
+    """Krippendorff's α on the ordinal scale ``{0, 0.5, 1}``.
 
     Args:
         verdicts: (N, L) array of per-call outcomes. Each row is an
             "item" rated by L "coders".
 
-    Implements the standard formula
-    $\\alpha = 1 - D_o / D_e$ with ordinal disagreement
-    $\\delta(c, c') = (c - c')^2$ (rescaled so coincident pairs
-    contribute zero). Returns 1.0 for perfect agreement, 0.0 for
-    chance, negative for systematic disagreement.
+    Closed-form coincidence-matrix formulation (Hayes & Krippendorff,
+    2007). Memory is O(C²) where C=3 is the number of ordinal
+    categories — independent of N and L, so the function scales to
+    the N≈32k items we have here (the naive pairwise version blows
+    out memory at ≈190 GiB).
+
+      $\\alpha = 1 - \\frac{\\sum_{c,c'} o_{c,c'} \\, (c-c')^2}
+                          {\\sum_{c,c'} e_{c,c'} \\, (c-c')^2}$
+
+    where $o_{c,c'}$ is the observed and $e_{c,c'}$ the expected
+    coincidence matrix, both corrected for sampling without
+    replacement. Returns ``1.0`` for perfect agreement, ``0.0`` for
+    chance, negative for systematic disagreement; ``nan`` when the
+    sample is too small or every rating is the same category
+    (vacuous α).
     """
     v = verdicts
     N, L = v.shape
     if N == 0 or L < 2:
         return float("nan")
-    # Pairs within each item: there are L*(L-1) ordered pairs / row.
-    diffs_within = (v[:, :, None] - v[:, None, :]) ** 2  # (N, L, L)
-    # Drop the diagonal (i==j) — no self-pair.
-    mask = ~np.eye(L, dtype=bool)
-    D_o = float(diffs_within[:, mask].mean())  # mean over all (item, pair)
-    # Expected disagreement: every pair drawn i.i.d. from the
-    # category marginal.
-    flat = v.flatten()
-    diffs_between = (flat[:, None] - flat[None, :]) ** 2
-    # exclude diagonal of the full (NL x NL) too.
-    mask_b = ~np.eye(N * L, dtype=bool)
-    D_e = float(diffs_between[mask_b].mean())
+    categories = np.array([0.0, 0.5, 1.0])
+    # Per-item category counts, shape (N, 3).
+    counts = np.stack([(v == c).sum(axis=1) for c in categories], axis=1)
+    n_per_cat = counts.sum(axis=0).astype(float)   # (3,)
+    n_total = float(n_per_cat.sum())               # = N · L
+    if n_total < 2 or (n_per_cat > 0).sum() < 2:
+        # All ratings the same category — α is vacuous (no signal).
+        return float("nan")
+    diff_sq = (categories[:, None] - categories[None, :]) ** 2  # (3,3)
+
+    # Observed coincidence: Σᵤ counts.T @ counts (pair counts per
+    # item) with diagonal correction (no self-pair) divided by (L-1).
+    o = counts.T.astype(float) @ counts.astype(float)
+    diag = np.arange(3)
+    o[diag, diag] -= n_per_cat
+    o /= (L - 1)
+
+    # Expected coincidence: random pairing across all units.
+    e = np.outer(n_per_cat, n_per_cat)
+    e[diag, diag] -= n_per_cat
+    e /= (n_total - 1)
+
+    D_o = float((o * diff_sq).sum())
+    D_e = float((e * diff_sq).sum())
     if D_e == 0:
         return 1.0
     return 1.0 - D_o / D_e
+
+
+_D2_H1_JUDGES = [
+    ("h1_tulu3-8b-rlvr_ultrafeedback_seed",   "Tülu-3-8B-RLVR"),
+    ("h1_qwen2.5-7b-instruct_ultrafeedback_seed", "Qwen2.5-7B-Instruct"),
+    ("h1_llama3.1-8b-instruct_ultrafeedback_seed", "Llama-3.1-8B-Instruct"),
+]
 
 
 def build_D2_position_bias(
     results_dir: Path,
     seed: int = 0,
     dataset: str = "ultrafeedback",
+    judges=_D2_H1_JUDGES,
 ) -> str:
     """Position-bias rate + Krippendorff's $\\alpha$ + majority margin.
 
     Reads the H1 self-judge audit log for each of the three H1 judges
     (Tülu-3-RLVR, Qwen2.5-7B, Llama-3.1-8B). For each judge we report:
       * A-pick rate: fraction of (i, k, l) verdicts where the judge
-        picked the candidate in position A. A no-bias judge gives 0.5.
+        picked the response in position A. A no-bias judge gives 0.5.
       * Krippendorff's $\\alpha$ on ternary scale across the $L$ raters.
       * Mean $|$majority margin$|$ = mean across (i, k) of the absolute
         difference between win-class and lose-class counts.
 
-    The audit log was written per-cell, so we partition by
-    ``experiment + judge model``; the model identity is inferred from
-    the surrounding result JSON. Re-extracting the per-call letter
-    requires the ``a_is_candidate`` flag added in Phase 2 — rows
-    without it are dropped with a one-line note in the LaTeX output.
+    A-pick recovery needs the per-call position flag
+    ``a_is_candidate``. Logs written before the 2026-05-24 audit-log
+    patch don't carry that field — but the position assignment in
+    :func:`src.verification.self_judge.score_matrix` is purely a
+    function of ``(seed, M, K, L)``:
+
+        rng = np.random.default_rng(seed)
+        a_is_candidate = rng.random(size=(M, K, L)) < 0.5
+
+    so we recompute it deterministically from the same seed (recorded
+    in every audit-log row). The Krippendorff $\\alpha$ and majority
+    margin only need ``raw_verdicts`` and are unaffected by the
+    reconstruction step. See ``_reconstruct_a_is_candidate`` for the
+    pure function used here.
     """
     paths = _paths_for(results_dir)
     log_file = paths.logs_dir / "verifier" / f"{dataset}_log.jsonl"
     if not log_file.exists():
         return (r"% D.2: self-judge audit log not present at "
-                r"\verb|" + str(log_file) + r"|. Re-run the "
-                r"UltraFeedback cells with the post-Phase-2 audit-"
-                r"logging in scripts/run_h1.py to populate.")
+                r"\verb|" + str(log_file) + r"|. Pull the log from a "
+                r"server that ran the H1 UltraFeedback cells.")
 
-    # Audit-log records don't directly tag judge identity; in H1 the
-    # judge is "strict-self", so the cell-runner appends one log per
-    # (model, dataset) cell in append-mode to the SAME file. We instead
-    # group by ``model`` recorded alongside the experiment in the
-    # surrounding result JSON. The simplest robust path here is to use
-    # the run-tag baked into the existing log: any record whose
-    # ``experiment`` is ``h1`` AND has ``a_is_candidate`` qualifies.
-    rows_by_model: dict[str, list[dict]] = {}
-    with open(log_file, "r", encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line:
-                continue
-            rec = json.loads(line)
-            if rec.get("experiment") != "h1":
-                continue
-            if "a_is_candidate" not in rec or "raw_verdicts" not in rec:
-                continue
-            # ``judge`` is set explicitly by the API-judge path; for
-            # the local-vLLM strict-self path we tag with ``"self"``
-            # and resolve to the generator model downstream.
-            tag = rec.get("judge") or rec.get("model") or "self"
-            rows_by_model.setdefault(tag, []).append(rec)
+    rows = [r"\begin{table}[htbp]", r"\centering", r"\small",
+            r"\caption{Self-judge audit-log diagnostics on the H1 "
+            r"UltraFeedback cells. \emph{A-pick rate} is the fraction "
+            r"of non-tie judge calls (across $M\cdot K\cdot L$ "
+            r"verdicts) where the judge picked the response in "
+            r"position A — a no-bias judge gives $0.5$. The position "
+            r"flag was reconstructed from the recorded cell seed via "
+            r"the same RNG call used at sampling time (deterministic "
+            r"replay; see \cref{app:calibration:L}). $\alpha$ is "
+            r"Krippendorff's $\alpha$ on the ternary scale "
+            r"$\{0,0.5,1\}$ across the $L{=}5$ verdicts of each "
+            r"(prompt, candidate) pair. \emph{Mean margin} is the "
+            r"average $|n_{\text{win}} - n_{\text{lose}}|$ across pairs.}",
+            r"\label{tab:appendix_position_bias}",
+            r"\begin{tabular}{lccc}", r"\toprule",
+            r"Judge & A-pick rate & $\alpha$ (ternary) & "
+            r"mean $|$margin$|$ \\", r"\midrule"]
 
-    if not rows_by_model:
-        return (r"% D.2: audit log present but no rows have "
-                r"\verb|a_is_candidate|. These rows were written before "
-                r"the Phase-2 patch; re-run UltraFeedback cells to "
-                r"populate.")
+    any_row = False
+    for exp_prefix, disp in judges:
+        audit = _load_self_judge_audit(
+            paths.logs_dir, dataset=dataset,
+            experiment=exp_prefix, experiment_match="prefix",
+        )
+        if audit is None:
+            rows.append(disp + r" & \textemdash & \textemdash & "
+                        r"\textemdash \\")
+            continue
+        any_row = True
+        raw = audit["raw_verdicts"]                      # (N, L)
+        L = audit["L"]
+        # Use the recorded a_is_candidate if present (post-Phase-2),
+        # otherwise reconstruct from seed (pre-Phase-2 logs).
+        pos = audit["a_is_candidate"]
+        method = "logged"
+        if pos.size == 0:
+            cell_seed = audit["seed"]
+            if cell_seed is None:
+                rows.append(disp + r" & \textemdash & \textemdash & "
+                            r"\textemdash \\")
+                continue
+            pos = _reconstruct_a_is_candidate(
+                cell_seed, audit["prompt_ids"], audit["ks"], L,
+            )
+            method = "reconstructed"
+            if pos.size == 0:
+                rows.append(disp + r" & \textemdash & \textemdash & "
+                            r"\textemdash \\")
+                continue
 
-    # Build the table.
-    lines = [
-        r"\begin{table}[htbp]", r"\centering", r"\small",
-        r"\caption{Self-judge audit-log diagnostics on UltraFeedback. "
-        r"\emph{A-pick rate} is the fraction of judge calls (across "
-        r"$M\cdot K\cdot L$ verdicts) where the judge picked the "
-        r"response in position A — a no-bias judge gives $0.5$. "
-        r"$\alpha$ is Krippendorff's $\alpha$ on the ternary scale "
-        r"$\{0,0.5,1\}$ across the $L$ verdicts of each (prompt, "
-        r"candidate) pair. \emph{Mean margin} is the average "
-        r"$|n_{\text{win}} - n_{\text{lose}}|$ across pairs.}",
-        r"\label{tab:appendix_position_bias}",
-        r"\begin{tabular}{lccc}", r"\toprule",
-        r"Judge & A-pick rate & $\alpha$ (ternary) & mean $|$margin$|$ \\",
-        r"\midrule",
-    ]
-    for tag, recs in rows_by_model.items():
-        raw = np.array([r["raw_verdicts"] for r in recs], dtype=float)
-        pos = np.array([r["a_is_candidate"] for r in recs], dtype=bool)
-        # "judge picked A" iff
-        #   (a_is_candidate AND verdict==1.0)  OR
-        #   (NOT a_is_candidate AND verdict==0.0)
+        # A-pick recovery.
         picked_a = (pos & (raw == 1.0)) | (~pos & (raw == 0.0))
-        # Restrict A-pick rate to non-tie verdicts (T doesn't bias either side).
         non_tie = (raw != 0.5)
-        a_pick = float(picked_a[non_tie].mean()) if non_tie.any() else float("nan")
+        a_pick = (float(picked_a[non_tie].mean())
+                  if non_tie.any() else float("nan"))
         alpha = _krippendorff_alpha_ternary(raw)
         n_win = (raw == 1.0).sum(axis=1)
         n_lose = (raw == 0.0).sum(axis=1)
         margin = float(np.abs(n_win - n_lose).mean())
-        lines.append(f"{tag} & {a_pick:.3f} & {alpha:.3f} & "
-                     f"{margin:.2f} \\\\")
-    lines += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
-    return "\n".join(lines)
+        rows.append(f"{disp} & {a_pick:.3f} & {alpha:.3f} & "
+                    f"{margin:.2f} \\\\  % position via {method}")
+
+    rows += [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
+    if not any_row:
+        return (r"% D.2: audit log present but no rows for any H1 "
+                r"self-judge cell. Make sure the UltraFeedback log "
+                r"contains experiment prefixes \verb|h1_<model>_"
+                r"ultrafeedback_seed|.")
+    return "\n".join(rows)
 
 
 # ======================================================================
