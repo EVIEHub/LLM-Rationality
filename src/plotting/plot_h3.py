@@ -58,9 +58,12 @@ _DATASET_ORDER = [
     ("matharena", "MathArena"),
 ]
 _MODEL_ORDER = [
-    ("tulu3-8b-rlvr", "Tülu-3-8B-RLVR"),
-    ("qwen2.5-7b-instruct", "Qwen2.5-7B-Instruct"),
-    ("llama3.1-8b-instruct", "Llama-3.1-8B-Instruct"),
+    # Display labels truncated (drop "-RLVR" / "-Instruct" tails) so the
+    # row-header text doesn't overlap the tight grid columns. The
+    # disambiguation lives in the figure caption, not the row label.
+    ("tulu3-8b-rlvr",        "Tülu-3-8B"),
+    ("qwen2.5-7b-instruct",  "Qwen2.5-7B"),
+    ("llama3.1-8b-instruct", "Llama-3.1-8B"),
 ]
 
 # REU / AEU / RVR line styles — colours anchored to match the tables.
@@ -146,7 +149,7 @@ def plot_sc_saturation(cells: list[dict[str, Any]], figures_dir: Path) -> Path |
             if j == 0:
                 # Model label on the y-axis (left edge); dataset labels
                 # are the column titles.
-                ax.set_ylabel(m_lbl + "\nutility", fontsize=15)
+                ax.set_ylabel(m_lbl + "\nutility", fontsize=19)
             if i == 0:
                 ax.set_title(ds_lbl, fontsize=18)
             if legend_panel:
@@ -208,7 +211,7 @@ def plot_temperature(cells: list[dict[str, Any]], figures_dir: Path) -> Path | N
             if i == len(models) - 1:
                 ax.set_xlabel(r"$\tau$")
             if j == 0:
-                ax.set_ylabel(m_lbl + "\nutility", fontsize=15)
+                ax.set_ylabel(m_lbl + "\nutility", fontsize=19)
             if i == 0:
                 ax.set_title(ds_lbl, fontsize=18)
             if legend_panel:

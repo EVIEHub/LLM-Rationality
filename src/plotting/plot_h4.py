@@ -49,9 +49,11 @@ _DATASET_ORDER = [
     ("matharena", "MathArena"),
 ]
 _MODEL_ORDER = [
-    ("tulu3-8b-rlvr",        "Tülu-3-8B-RLVR"),
-    ("qwen2.5-7b-instruct",  "Qwen2.5-7B-Instruct"),
-    ("llama3.1-8b-instruct", "Llama-3.1-8B-Instruct"),
+    # Display labels truncated to match plot_h3.py and free up the row-
+    # header column; the full names appear in the table captions.
+    ("tulu3-8b-rlvr",        "Tülu-3-8B"),
+    ("qwen2.5-7b-instruct",  "Qwen2.5-7B"),
+    ("llama3.1-8b-instruct", "Llama-3.1-8B"),
 ]
 # Same anchor palette as the H1 tables / H3 plots.
 _METRIC_STYLE = [
@@ -132,7 +134,7 @@ def plot_h4_budget(cells: list[dict[str, Any]], figures_dir: Path) -> Path | Non
             if i == len(models) - 1:
                 ax.set_xlabel(r"$L$")
             if j == 0:
-                ax.set_ylabel(m_lbl + "\nutility", fontsize=15)
+                ax.set_ylabel(m_lbl + "\nutility", fontsize=19)
             if i == 0:
                 ax.set_title(ds_lbl, fontsize=18)
             if legend_panel:

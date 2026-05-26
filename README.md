@@ -1,28 +1,18 @@
 # In LLM Reasoning, there is Irrationality on top of Value Misalignment
 
-This repository contains the code for measuring **rational value risk (RVR)** in large language model reasoning. The experiments report three quantities:
-
-- **REU**: expected utility of compute-bounded rational reasoning.
-- **AEU**: expected utility of the actual deployed reasoning strategy.
-- **RVR**: the gap between REU and AEU.
+This repository contains the code for measuring **rational value risk (RVR)** in large language model reasoning.
 
 ## Paper hypotheses
 
 The paper evaluates four hypotheses:
 
-- **H1 — Rational value risk is widespread.**  
-  LLMs can generate high-utility candidate answers but fail to deploy them consistently across conversational, mathematical reasoning, and code generation tasks.
+- **H1.** Rational value risk is widespread. Across models and benchmarks, LLMs constantly generate high-utility candidates but fail to consistently deploy them.
+- **H2.** Value alignment methods can reduce, but cannot eliminate, rational value risk. Rationality is not fully solved by value alignment alone.
+- **H3.** Rational value risk is highly sensitive to the inference-time reasoning strategy, including sampling temperature and self-consistency. 
+- **H4.** Longer reasoning can improve rationality, but its benefits diminish beyond a certain reasoning budget.
 
-- **H2 — Value alignment reduces but does not eliminate rational value risk.**  
-  Post-training stages such as SFT, DPO, and RLVR improve actual utility, but rational value risk remains after alignment.
 
-- **H3 — Rational value risk is sensitive to inference-time reasoning strategy.**  
-  Sampling temperature and self-consistency can change both the sampled candidate answers and the final deployed answer.
-
-- **H4 — Longer reasoning improves rationality with diminishing returns.**  
-  Increasing the reasoning length can reduce rational value risk, but the benefit becomes smaller beyond a certain reasoning-token budget.
-
-The repository also includes a **proprietary model deployment evaluation** covering GPT-5.2, GPT-5.5, and DeepSeek-V4-Flash on deployment-style benchmarks.
+The repository also includes a **proprietary model** covering GPT-5.2, GPT-5.5, and DeepSeek-V4-Flash on MathArena benchmark.
 
 ## Quick start
 
@@ -100,27 +90,6 @@ Model registry. Each entry specifies the model identifier, model family, prompt 
 
 Dataset registry. Each entry specifies the dataset, prompt format, verifier type, and answer extraction configuration.
 
-## Evaluation
-
-The repository supports both stochastic preference evaluation and deterministic verifiable reasoning evaluation.
-
-### Conversational tasks
-
-For UltraFeedback and AlpacaEval, a verifier compares a generated answer with a reference answer and returns one of:
-
-- win: utility \(1\)
-- tie: utility \(0.5\)
-- lose: utility \(0\)
-
-The verifier can be the evaluated model itself or a stronger external judge.
-
-### Verifiable reasoning tasks
-
-For GSM8K, MATH, MathArena, HumanEval, and LiveCodeBench, utility is determined by answer correctness:
-
-- math tasks use numeric or symbolic answer checking;
-- code tasks use unit-test execution;
-- a candidate receives utility \(1\) if it passes the verifier and \(0\) otherwise.
 
 
 ## Tests
@@ -214,17 +183,6 @@ python -m scripts.reverify_from_cache \
   --samples <cache.jsonl.gz> \
   --result <result.json> \
   --dataset <dataset_name>
-```
-
-## Citation
-
-```bibtex
-@inproceedings{rational-value-risk-2026,
-  title     = {In LLM Reasoning, there is Irrationality on top of Value Misalignment},
-  author    = {<authors>},
-  year      = {2026},
-  booktitle = {<venue>}
-}
 ```
 
 ## License
