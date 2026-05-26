@@ -185,6 +185,16 @@ python -m scripts.reverify_from_cache \
   --dataset <dataset_name>
 ```
 
+## Citation
+
+```bibtex
+@article{qian2026LLM,
+  title={In LLM Reasoning, there is Irrationality on top of Value Misalignment},
+  author={Qian, Kejiang and He, Fengxiang},
+  year={2026}
+}
+```
+
 ## License
 
 MIT License for the code. Datasets retain their original licenses.
