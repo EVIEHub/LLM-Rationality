@@ -17,8 +17,8 @@ The repository also includes a **proprietary model** covering GPT-5.2, GPT-5.5, 
 ## Quick start
 
 ```bash
-git clone <repo-url> rational-value-risk
-cd rational-value-risk
+git clone https://github.com/EVIEHub/LLM-Rationality.git
+cd LLM-Rationality
 
 # 1. Install dependencies.
 # This creates the conda environment, installs PyTorch + vLLM, and runs tests.
