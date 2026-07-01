@@ -188,7 +188,7 @@ python -m scripts.reverify_from_cache \
 ## Citation
 
 ```bibtex
-@misc{qian2026llmreasoningirrationalityvalue,
+@misc{qian2026llm,
       title={In LLM Reasoning, there is Irrationality on top of Value Misalignment}, 
       author={Kejiang Qian and Fengxiang He},
       year={2026},
