@@ -127,12 +127,15 @@ def plot_h4_budget(cells: list[dict[str, Any]], figures_dir: Path) -> Path | Non
                         label=(label if legend_panel else None), **kw,
                     )
             ax.set_xticks(range(len(all_Ls)))
-            # The L=0 cell is "no reasoning"; label as 0 not as $\log_2$.
-            ax.set_xticklabels([str(L) for L in all_Ls], rotation=0)
+            # The T=0 cell is "no reasoning"; label as 0 not as $\log_2$.
+            # Rotate so the wide adjacent labels (1024/2048) don't collide.
+            ax.set_xticklabels(
+                [str(L) for L in all_Ls], rotation=45, ha="right",
+            )
             ax.grid(True, alpha=0.3)
             ax.set_ylim(0, 1.0)
             if i == len(models) - 1:
-                ax.set_xlabel(r"$L$")
+                ax.set_xlabel(r"$T$")
             if j == 0:
                 ax.set_ylabel(m_lbl + "\nutility", fontsize=19)
             if i == 0:
